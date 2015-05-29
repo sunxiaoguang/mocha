@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<project name="rpc" default="compile" basedir=".">
+
+  <import file="build/ant/common.xml"/>
+
+  <!-- set classpath -->
+  <path id="build.classpath">
+    <pathelement location="${classes.dir}/"/>
+    <fileset refid="netty-all-latest.jar"/>
+    <fileset refid="slf4j-api-latest.jar"/>
+    <pathelement location="core/output/lib/moca-core-current.jar"/>
+  </path>
+
+  <path id="runtime.classpath">
+    <pathelement location="${classes.dir}/"/>
+    <fileset refid="slf4j-api-latest.jar"/>
+    <fileset refid="slf4j-simple-latest.jar"/>
+  </path>
+
+  <target name="compile" depends="common-compile, common-compile-test" />
+
+  <target name="package" depends="common-package"/>
+
+  <target name="clean" depends="common-clean" />
+</project>
