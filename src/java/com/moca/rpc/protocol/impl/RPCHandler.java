@@ -2,6 +2,7 @@ package com.moca.rpc.protocol.impl;
 
 import java.nio.*;
 import java.util.*;
+import java.io.*;
 
 import io.netty.buffer.*;
 import io.netty.channel.*;
@@ -301,14 +302,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
       try {
         dispatchPayload(buffer, commit);
       } finally {
-        int readable = buffer.readableBytes();
-        if (readable > 0) {
-          buffer.skipBytes(readable);
-          logger.warn("There are still " + readable + " bytes payload not being consumed by listener");
+        if (commit) {
+          reset(STATE_READ_DONE);
         }
-      }
-      if (commit) {
-        reset(STATE_READ_DONE);
       }
     }
 
@@ -453,7 +449,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
 
   private void dispatchPayload(ByteBuf buffer, boolean commit)
   {
-    listener.onPayload(channel, buffer, commit);
+    try (PayloadInputStream is = new PayloadInputStream(buffer)) {
+      listener.onPayload(channel, is, commit);
+    }
   }
 
   private static void invalidStateMigration(byte oldState, byte expecting, byte newState)
