@@ -50,10 +50,15 @@ public final class ProtocolUtils
   {
   }
 
+  static String readString(ByteBuf buffer)
+  {
+    return buffer.toString(UTF8_CHARSET);
+  }
+
   static String deserializeString(ByteBuf buffer)
   {
     int stringLength = buffer.readInt();
-    String result = buffer.readSlice(stringLength).toString(UTF8_CHARSET);
+    String result = readString(buffer.readSlice(stringLength));
     buffer.skipBytes(1);
     return result;
   }

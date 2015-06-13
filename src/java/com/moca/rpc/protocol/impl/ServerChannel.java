@@ -12,6 +12,8 @@ import io.netty.channel.*;
 import io.netty.channel.socket.*;
 import io.netty.channel.socket.nio.*;
 import io.netty.handler.timeout.*;
+import io.netty.handler.ssl.*;
+import io.netty.handler.logging.*;
 
 public class ServerChannel extends ChannelImpl
 {
@@ -20,23 +22,28 @@ public class ServerChannel extends ChannelImpl
   private io.netty.channel.Channel listenChannel;
   private static Logger logger = LoggerFactory.getLogger(ServerChannel.class);
 
-  public ServerChannel(final ChannelListener listener, InetSocketAddress address, int timeout, int limit)
+  public ServerChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int limit, boolean debug, SslContext ssl)
   {
+    super(id);
     boolean cleanup = true;
     try {
       parentGroup = createListenEventLoopGroup();
       childGroup = createSocketEventLoopGroup();
-      ServerBootstrap bootstrap = new ServerBootstrap();
-      bootstrap.group(parentGroup, childGroup)
-        .channel(NioServerSocketChannel.class)
-        .localAddress(address)
+      ServerBootstrap bootstrap = new ServerBootstrap().group(parentGroup, childGroup).channel(NioServerSocketChannel.class);
+      if (debug) {
+        bootstrap.handler(new LoggingHandler());
+      }
+      bootstrap.localAddress(address)
         .childHandler(new ChannelInitializer<SocketChannel>() {
           @Override
           protected void initChannel(SocketChannel ch)
           {
-            final ChannelImpl newChannel = new ChannelImpl();
+            final ChannelImpl newChannel = new ChannelImpl(id);
             ChannelPipeline pipeline = ch.pipeline();
-            pipeline.addLast(new RPCHandler(newChannel, listener, limit));
+            if (ssl != null) {
+              pipeline.addLast(ssl.newHandler(ch.alloc()));
+            }
+            pipeline.addLast(new RPCHandler(newChannel, listener, limit, true));
             pipeline.addLast(new IdleStateHandler(timeout, timeout, timeout) {
               @Override
               protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt)

@@ -33,6 +33,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   private ByteOrder channelOrder;
   private int channelFlags;
   private int channelVersion;
+  private boolean sendNegotiation = false;
 
   private void setMinReadableBytes(int bytes)
   {
@@ -57,6 +58,21 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     protected int state()
     {
       return readerState;
+    }
+
+    protected long readLong(ByteBuf buffer, byte nextState)
+    {
+      int readable = buffer.readableBytes();
+      long result = 0;
+      if (readable >= 8) {
+        result = buffer.readLong();
+        readerState = nextState;
+        setMinReadableBytes(1);
+      } else {
+        setMinReadableBytes(8);
+      }
+
+      return result;
     }
 
     protected int readInt(ByteBuf buffer, byte nextState)
@@ -98,11 +114,15 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   {
     private static final byte STATE_READ_MAGIC = 0;
     private static final byte STATE_READ_FLAGS = 1;
-    private static final byte STATE_READ_DONE = 2;
+    private static final byte STATE_READ_PEER_ID_LENGTH = 2;
+    private static final byte STATE_READ_PEER_ID = 3;
+    private static final byte STATE_READ_DONE = 4;
 
     private ByteOrder order;
     private int flags;
     private int version;
+    private int peerIdLength;
+    private ByteBuf peerId;
 
     private int getFlags()
     {
@@ -112,6 +132,11 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     private int getVersion()
     {
       return version;
+    }
+
+    private String getId()
+    {
+      return ProtocolUtils.readString(peerId);
     }
 
     private NegotiationReader() {
@@ -144,11 +169,30 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     private ByteBuf readFlags(ByteBuf buffer)
     {
       buffer = buffer.order(order);
-      flags = readInt(buffer, STATE_READ_DONE);
-      if (isState(STATE_READ_DONE)) {
+      flags = readInt(buffer, STATE_READ_PEER_ID_LENGTH);
+      if (isState(STATE_READ_PEER_ID_LENGTH)) {
         version = flags & 0xFF;
         flags >>>= 8;
       }
+      return buffer;
+    }
+
+    private ByteBuf readPeerIdLength(ByteBuf buffer)
+    {
+      buffer = buffer.order(order);
+      peerIdLength = readInt(buffer, STATE_READ_PEER_ID);
+      if (isState(STATE_READ_PEER_ID)) {
+        if (peerIdLength > ChannelImpl.MAX_CHANNEL_ID_LENGTH) {
+          throw new RuntimeException("Peer ID length " + peerIdLength + " is greater than max limit of " + ChannelImpl.MAX_CHANNEL_ID_LENGTH);
+        }
+        peerId = Unpooled.buffer(peerIdLength);
+      }
+      return buffer;
+    }
+
+    private ByteBuf readPeerId(ByteBuf buffer)
+    {
+      readBits(buffer, peerId, peerIdLength, STATE_READ_DONE);
       return buffer;
     }
 
@@ -160,6 +204,12 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
           break;
         case STATE_READ_FLAGS:
           buffer = readFlags(buffer);
+          break;
+        case STATE_READ_PEER_ID_LENGTH:
+          buffer = readPeerIdLength(buffer);
+          break;
+        case STATE_READ_PEER_ID:
+          buffer = readPeerId(buffer);
         default:
       }
       return buffer;
@@ -180,12 +230,14 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
 
   private final class HeaderReader extends Reader
   {
-    private static final byte STATE_READ_HEADER_FLAGS = 0;
-    private static final byte STATE_READ_HEADER_SIZE = 1;
-    private static final byte STATE_READ_PAYLOAD_SIZE = 2;
-    private static final byte STATE_READ_HEADER = 3;
-    private static final byte STATE_READ_DONE = 4;
+    private static final byte STATE_READ_HEADER_REQUEST_ID = 0;
+    private static final byte STATE_READ_HEADER_FLAGS = 1;
+    private static final byte STATE_READ_HEADER_SIZE = 2;
+    private static final byte STATE_READ_PAYLOAD_SIZE = 3;
+    private static final byte STATE_READ_HEADER = 4;
+    private static final byte STATE_READ_DONE = 5;
 
+    private long requestId;
     private int flags;
     private int headerSize;
     private int payloadSize;
@@ -198,8 +250,13 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
 
     void reset()
     {
-      reset(STATE_READ_HEADER_FLAGS);
+      reset(STATE_READ_HEADER_REQUEST_ID);
       headerBuffer = null;
+    }
+
+    void readHeaderRequestId(ByteBuf buffer)
+    {
+      requestId = readLong(buffer, STATE_READ_HEADER_FLAGS);
     }
 
     void readHeaderFlags(ByteBuf buffer)
@@ -215,18 +272,20 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     void readPayloadSize(ByteBuf buffer)
     {
       payloadSize = readInt(buffer, STATE_READ_HEADER);
-      if (isState(STATE_READ_HEADER) && headerSize > 0 && payloadSize >= 0) {
+      if (isState(STATE_READ_HEADER)) {
+        if (headerSize < 0 || payloadSize < 0) {
+          throw new RuntimeException("Invalid negative header or payload size");
+        }
         if (headerSize > limit) {
           throw new RuntimeException("Header size " + headerSize
               + " from channel " + channel
               + " is larger than limit, force closing");
         }
-        headerBuffer = Unpooled.buffer(headerSize);
-      } else {
-        if (headerSize < 0 || payloadSize < 0) {
-          throw new RuntimeException("Invalid negative header or payload size");
+        if (headerSize == 0) {
+          reset(STATE_READ_DONE);
+        } else {
+          headerBuffer = Unpooled.buffer(headerSize);
         }
-        reset(STATE_READ_DONE);
       }
     }
 
@@ -238,6 +297,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     void doRead(ByteBuf buffer)
     {
       switch (state()) {
+        case STATE_READ_HEADER_REQUEST_ID:
+          readHeaderRequestId(buffer);
+          break;
         case STATE_READ_HEADER_FLAGS:
           readHeaderFlags(buffer);
           break;
@@ -261,7 +323,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
         doRead(buffer);
       }
       if (isState(STATE_READ_DONE)) {
-        dispatchRequest(ProtocolUtils.deserialize(headerBuffer, channelOrder), payloadSize);
+        dispatchRequest(requestId, ProtocolUtils.deserialize(headerBuffer, channelOrder), payloadSize);
         if (payloadSize == 0) {
           changeState(STATE_START_OVER);
         } else {
@@ -274,6 +336,11 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     {
       return payloadSize;
     }
+
+    long getRequestId()
+    {
+      return requestId;
+    }
   }
 
   private final class PayloadReader extends Reader
@@ -282,10 +349,12 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     private static final byte STATE_READ_DONE = 1;
 
     private int remaining;
+    private long requestId;
 
     void reset()
     {
       remaining = headerReader.getPayloadSize();
+      requestId = headerReader.getRequestId();
       reset(STATE_READ_PAYLOAD);
     }
 
@@ -300,7 +369,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
       }
       boolean commit = remaining == 0;
       try {
-        dispatchPayload(buffer, commit);
+        dispatchPayload(requestId, buffer, commit);
       } finally {
         if (commit) {
           reset(STATE_READ_DONE);
@@ -319,16 +388,34 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     }
   }
 
-  public RPCHandler(ChannelImpl channel, ChannelListener listener, int limit) {
+  public RPCHandler(ChannelImpl channel, ChannelListener listener, int limit, boolean sendNegotiation) {
     this.channel = channel;
     this.listener = listener;
     this.limit = limit;
+    this.sendNegotiation = sendNegotiation;
+  }
+
+  private void doSendNegotiation()
+  {
+    String id = channel.getLocalId();
+    byte[] idBytes = run(() -> id.getBytes("UTF-8"));
+    if (idBytes.length > ChannelImpl.MAX_CHANNEL_ID_LENGTH) {
+      throw new RuntimeException("Size of channel id " + idBytes.length + " is greater than limit of " + ChannelImpl.MAX_CHANNEL_ID_LENGTH);
+    }
+    ByteBuf buffer = Unpooled.buffer(4 + 4 + 4).order(ByteOrder.nativeOrder());
+    buffer.writeInt(0X4D4F4341);
+    buffer.writeInt(0);
+    buffer.writeInt(idBytes.length);
+    channel.writeAndFlush(Unpooled.wrappedBuffer(buffer, Unpooled.wrappedBuffer(idBytes)));
   }
 
   @Override
   public void channelActive(ChannelHandlerContext ctx) throws Exception
   {
     channel.init(ctx.channel());
+    if (sendNegotiation) {
+      doSendNegotiation();
+    }
     listener.onConnect(channel);
   }
 
@@ -409,7 +496,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
               oldQueued = null;
             }
 
-            queued = Unpooled.wrappedBuffer(queued, Unpooled.copiedBuffer(input));
+            ByteBuf tmp = queued;
+            ByteBuf copy = Unpooled.copiedBuffer(input);
+            queued = Unpooled.wrappedBuffer(tmp, copy);
           } else {
             int inputRead = inputSize - leftBytes;
             if (inputRead > 0) {
@@ -442,15 +531,15 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     ctx.close();
   }
 
-  private void dispatchRequest(Map<String, String> header, int payloadSize)
+  private void dispatchRequest(long requestId, Map<String, String> header, int payloadSize)
   {
-    listener.onRequest(channel, header, payloadSize);
+    listener.onRequest(channel, requestId, header, payloadSize);
   }
 
-  private void dispatchPayload(ByteBuf buffer, boolean commit)
+  private void dispatchPayload(long requestId, ByteBuf buffer, boolean commit)
   {
     try (PayloadInputStream is = new PayloadInputStream(buffer)) {
-      listener.onPayload(channel, is, commit);
+      listener.onPayload(channel, requestId, is, commit);
     }
   }
 
@@ -502,9 +591,11 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   {
     checkAndSetState(newState, STATE_HEADER);
     channel.remoteOrder(channelOrder);
+    channel.remoteId(negotiationReader.getId());
     channelFlags = negotiationReader.getFlags();
     channelVersion = negotiationReader.getVersion();
     negotiationReader = null;
+    listener.onEstablished(channel);
     toHeader();
   }
 
