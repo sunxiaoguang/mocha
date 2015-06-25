@@ -23,7 +23,9 @@ public abstract class Channel
     Builder ssl(File certificateChainFile, File privateKey);
     Builder ssl(File certificateChainFile, File privateKey, String keyPassword);
     Builder ssl(File certificateChainFile, File privateKey, Callable<String> keyPasswordProvider);
+    Builder keepalive(long interval, TimeUnit unit);
     Builder id(String id);
+    Builder dispatchThread();
     Channel build();
   }
 
@@ -32,8 +34,33 @@ public abstract class Channel
     return ChannelImpl.builder();
   }
 
-  public abstract Future response(long id, Map<String, String> response);
-  public abstract Future request(Map<String, String> request);
+  public abstract Future response(long id, int code, Map<String, String> headers, byte[] payload, int offset, int size);
+  public Future response(long id, int code, Map<String, String> headers, byte[] payload)
+  {
+    return response(id, code, headers, payload, 0, payload.length);
+  }
+  public Future response(long id, int code, Map<String, String> headers)
+  {
+    return response(id, code, headers, null, 0, 0);
+  }
+  public Future response(long id, int code)
+  {
+    return response(id, code, null, null, 0, 0);
+  }
+
+  public abstract Future request(int code, Map<String, String> headers, byte[] payload, int offset, int size);
+  public Future request(int code, Map<String, String> headers, byte[] payload)
+  {
+    return request(code, headers, payload, 0, payload.length);
+  }
+  public Future request(int code, Map<String, String> headers)
+  {
+    return request(code, headers, null, 0, 0);
+  }
+  public Future request(int code)
+  {
+    return request(code, null, null, 0, 0);
+  }
   public abstract Future shutdown();
 
   public abstract InetSocketAddress getLocalAddress();

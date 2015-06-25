@@ -5,10 +5,11 @@ import java.io.*;
 
 public interface ChannelListener
 {
-  void onRequest(Channel channel, long id, Map<String, String> headers, int payloadSize);
-  void onPayload(Channel channel, long id, InputStream payload, boolean commit);
-  void onConnect(Channel channel);
+  void onRequest(Channel channel, long id, int code, Map<String, String> headers, int payloadSize);
+  void onResponse(Channel channel, long id, int code, Map<String, String> headers, int payloadSize);
+  void onPayload(Channel channel, long id, int code, InputStream payload, boolean commit);
+  void onConnected(Channel channel);
   void onEstablished(Channel channel);
-  void onDisconnect(Channel channel);
+  void onDisconnected(Channel channel);
   void onError(Channel channel, Throwable error);
 }

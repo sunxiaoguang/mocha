@@ -22,9 +22,11 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
 {
   private static Logger logger = LoggerFactory.getLogger(ChannelImpl.class);
   protected static int MAX_CHANNEL_ID_LENGTH = 128;
+  private static int MAX_PENDING_EVENTS = 128;
 
   private static EventLoopGroupFactory listenLoopGroupFactory = new EventLoopGroupFactory(NioEventLoopGroup.class);
   private static EventLoopGroupFactory socketLoopGroupFactory = listenLoopGroupFactory;
+  private AtomicLong lastKeepaliveTime = new AtomicLong(0);
 
   static synchronized EventLoopGroup createListenEventLoopGroup()
   {
@@ -65,7 +67,9 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     private int limit = Integer.MAX_VALUE;
     private boolean debug = false;
     private SslContext ssl;
+    private int keepaliveInterval = 5;
     private byte[] id;
+    private boolean enableDispatchThread = false;
 
     private Builder()
     {
@@ -134,6 +138,12 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
       return this;
     }
 
+    public Builder keepalive(long interval, TimeUnit unit)
+    {
+      this.keepaliveInterval = (int) TimeUnit.SECONDS.convert(interval, unit);
+      return this;
+    }
+
     public Builder debug()
     {
       this.debug = true;
@@ -173,15 +183,21 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
       return this;
     }
 
+    public Builder dispatchThread()
+    {
+      this.enableDispatchThread = true;
+      return this;
+    }
+
     public com.moca.rpc.protocol.Channel build()
     {
       while (id == null) {
         id(UUID.randomUUID().toString());
       }
       if (isClient) {
-        return run(() -> new ClientChannel(new String(id, "UTF-8"), listener, address, 50 * 60, limit, debug, ssl));
+        return run(() -> new ClientChannel(new String(id, "UTF-8"), listener, address, timeout, keepaliveInterval, limit, debug, ssl));
       } else {
-        return run(() -> new ServerChannel(new String(id, "UTF-8"), listener, address, 50 * 60, limit, debug, ssl));
+        return run(() -> new ServerChannel(new String(id, "UTF-8"), listener, address, timeout, keepaliveInterval, limit, debug, ssl));
       }
     }
   }
@@ -192,15 +208,35 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
   private ByteOrder localOrder = ByteOrder.nativeOrder();
   private String localId;
   private volatile String remoteId;
+  private Thread dispatcher;
+  private BlockingQueue pendingEvents;
+  private volatile boolean running;
 
   public static Builder builder()
   {
     return new Builder();
   }
 
-  protected ChannelImpl(String id)
+  private void doDispatch()
+  {
+  }
+
+  private void initDispatcher()
+  {
+    pendingEvents = new ArrayBlockingQueue(MAX_PENDING_EVENTS);
+    running = true;
+    dispatcher = new Thread(() -> {
+      doDispatch();
+    });
+    dispatcher.start();
+  }
+
+  protected ChannelImpl(String id, boolean dispatchThread)
   {
     this.localId = id;
+    if (dispatchThread) {
+      initDispatcher();
+    }
   }
 
   @Override
@@ -236,30 +272,79 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     return channel.writeAndFlush(buf);
   }
 
-  public Future doSend(long id, Map<String, String> response)
+  protected Future keepalive(long interval)
   {
-    ByteBuf serialized = ProtocolUtils.serialize(response, localOrder);
-    int serializedSize = serialized.readableBytes();
-    ByteBuf fixedBuffer = Unpooled.buffer(8 + 4 + 4 + 4).order(localOrder);
+    long now = System.currentTimeMillis();
+    if (now - lastKeepaliveTime.get() < interval) {
+      return RPCFuture.completed();
+    }
+    lastKeepaliveTime.set(now);
+    ByteBuf fixedBuffer = Unpooled.buffer(8 + 4 + 4 + 4 + 4).order(localOrder);
+    // request id
+    fixedBuffer.writeLong(currentId.getAndIncrement());
+    // code
+    fixedBuffer.writeInt(RPCHandler.HINT_CODE_KEEPALIVE);
+    // flag
+    fixedBuffer.writeInt(RPCHandler.PACKET_TYPE_HINT);
+    // header size
+    fixedBuffer.writeInt(0);
+    // payload size
+    fixedBuffer.writeInt(0);
+    return writeAndFlush(fixedBuffer);
+  }
+
+  public Future doSend(long id, int code, int type, Map<String, String> headers, byte[] payload, int offset, int size)
+  {
+    if (remoteId == null) {
+      throw new IllegalStateException("Session has not been established yet");
+    }
+    int headersSize;
+    ByteBuf serializedHeaders;
+    if (headers != null && !headers.isEmpty()) {
+      serializedHeaders = ProtocolUtils.serialize(headers, localOrder);
+      headersSize = serializedHeaders.readableBytes();
+    } else {
+      serializedHeaders = null;
+      headersSize = 0;
+    }
+    ByteBuf payloadBuffer;
+    if (size > 0) {
+      if (payload.length <= offset + size) {
+        throw new ArrayIndexOutOfBoundsException(offset + size);
+      }
+      payloadBuffer = Unpooled.wrappedBuffer(payload, offset, size);
+    } else {
+      payloadBuffer = null;
+    }
+    ByteBuf fixedBuffer = Unpooled.buffer(8 + 4 + 4 + 4 + 4).order(localOrder);
     // request id
     fixedBuffer.writeLong(id);
-    //flag
-    fixedBuffer.writeInt(0);
-    //header size
-    fixedBuffer.writeInt(serializedSize);
-    //payload size
-    fixedBuffer.writeInt(0);
-    return writeAndFlush(Unpooled.wrappedBuffer(fixedBuffer, serialized));
+    // code
+    fixedBuffer.writeInt(code);
+    // flag
+    fixedBuffer.writeInt(type);
+    // header size
+    fixedBuffer.writeInt(headersSize);
+    // payload size
+    fixedBuffer.writeInt(size);
+    ByteBuf buffer = fixedBuffer;
+    if (headersSize > 0) {
+      buffer = Unpooled.wrappedBuffer(buffer, serializedHeaders);
+    }
+    if (size > 0) {
+      buffer = Unpooled.wrappedBuffer(buffer, payloadBuffer);
+    }
+    return writeAndFlush(buffer);
   }
 
-  public Future response(long id, Map<String, String> response)
+  public Future response(long id, int code, Map<String, String> headers, byte[] payload, int offset, int size)
   {
-    return doSend(id, response);
+    return doSend(id, code, RPCHandler.PACKET_TYPE_RESPONSE, headers, payload, offset, size);
   }
 
-  public Future request(Map<String, String> request)
+  public Future request(int code, Map<String, String> headers, byte[] payload, int offset, int size)
   {
-    return doSend(currentId.getAndIncrement(), request);
+    return doSend(currentId.getAndIncrement(), code, RPCHandler.PACKET_TYPE_REQUEST, headers, payload, offset, size);
   }
 
   public Future shutdown()

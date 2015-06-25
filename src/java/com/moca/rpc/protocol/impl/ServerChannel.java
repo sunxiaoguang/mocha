@@ -22,9 +22,9 @@ public class ServerChannel extends ChannelImpl
   private io.netty.channel.Channel listenChannel;
   private static Logger logger = LoggerFactory.getLogger(ServerChannel.class);
 
-  public ServerChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int limit, boolean debug, SslContext ssl)
+  public ServerChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int keepaliveInterval, int limit, boolean debug, SslContext ssl)
   {
-    super(id);
+    super(id, true);
     boolean cleanup = true;
     try {
       parentGroup = createListenEventLoopGroup();
@@ -38,20 +38,30 @@ public class ServerChannel extends ChannelImpl
           @Override
           protected void initChannel(SocketChannel ch)
           {
-            final ChannelImpl newChannel = new ChannelImpl(id);
+            final ChannelImpl newChannel = new ChannelImpl(id, false);
             ChannelPipeline pipeline = ch.pipeline();
+            final int finalTimeout = (timeout <= 0 ? Integer.MAX_VALUE : timeout) * 1000;
+            final int finalKeepaliveInterval = (keepaliveInterval <= 0 ? Integer.MAX_VALUE : keepaliveInterval) * 1000;
+            if (finalTimeout < Integer.MAX_VALUE || finalKeepaliveInterval < Integer.MAX_VALUE) {
+              int interval = Math.min(finalTimeout, finalKeepaliveInterval) / 1000;
+              pipeline.addLast("IdleHandler", new IdleStateHandler(interval, interval, interval) {
+                @Override
+                protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt)
+                {
+                  if (getWriterIdleTimeInMillis() >= finalKeepaliveInterval) {
+                    newChannel.keepalive(finalKeepaliveInterval);
+                  }
+                  if (getAllIdleTimeInMillis() >= finalTimeout) {
+                    logger.warn("Channel " + newChannel + " has been idle for " + timeout + " sec(s), shut it down");
+                    ctx.close();
+                  }
+                }
+              });
+            }
             if (ssl != null) {
               pipeline.addLast(ssl.newHandler(ch.alloc()));
             }
-            pipeline.addLast(new RPCHandler(newChannel, listener, limit, true));
-            pipeline.addLast(new IdleStateHandler(timeout, timeout, timeout) {
-              @Override
-              protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt)
-              {
-                logger.warn("Channel " + newChannel + " has been idle for " + timeout + " sec(s), shut it down");
-                ctx.close();
-              }
-            });
+            pipeline.addLast("Handler", new RPCHandler(newChannel, listener, limit, true));
           }
         })
         .childOption(ChannelOption.SO_KEEPALIVE, true)

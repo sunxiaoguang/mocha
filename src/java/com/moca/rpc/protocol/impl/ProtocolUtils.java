@@ -55,6 +55,11 @@ public final class ProtocolUtils
     return buffer.toString(UTF8_CHARSET);
   }
 
+  static String readString(ByteBuf buffer, int length)
+  {
+    return buffer.toString(0, length, UTF8_CHARSET);
+  }
+
   static String deserializeString(ByteBuf buffer)
   {
     int stringLength = buffer.readInt();

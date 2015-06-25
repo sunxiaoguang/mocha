@@ -13,6 +13,7 @@ import io.netty.channel.socket.*;
 import io.netty.channel.socket.nio.*;
 import io.netty.handler.ssl.*;
 import io.netty.handler.logging.*;
+import io.netty.handler.timeout.*;
 
 import com.moca.rpc.protocol.*;
 
@@ -20,9 +21,9 @@ public class ClientChannel extends ChannelImpl
 {
   private EventLoopGroup loopGroup;
 
-  public ClientChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int limit, boolean debug, SslContext ssl)
+  public ClientChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int keepaliveInterval, int limit, boolean debug, SslContext ssl)
   {
-    super(id);
+    super(id, true);
     boolean cleanup = true;
     try {
       loopGroup = createSocketEventLoopGroup();
@@ -37,6 +38,23 @@ public class ClientChannel extends ChannelImpl
           public void initChannel(SocketChannel ch)
           {
             ChannelPipeline pipeline = ch.pipeline();
+            final int finalTimeout = (timeout <= 0 ? Integer.MAX_VALUE : timeout) * 1000;
+            final int finalKeepaliveInterval = (keepaliveInterval <= 0 ? Integer.MAX_VALUE : keepaliveInterval) * 1000;
+            if (finalTimeout < Integer.MAX_VALUE || finalKeepaliveInterval < Integer.MAX_VALUE) {
+              int interval = Math.min(finalTimeout, finalKeepaliveInterval) / 1000;
+              pipeline.addLast("IdleHandler", new IdleStateHandler(interval, interval, interval) {
+                @Override
+                protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt)
+                {
+                  if (getWriterIdleTimeInMillis() >= finalKeepaliveInterval) {
+                    keepalive(finalKeepaliveInterval);
+                  }
+                  if (getAllIdleTimeInMillis() >= finalTimeout) {
+                    ctx.close();
+                  }
+                }
+              });
+            }
             if (ssl != null) {
               pipeline.addLast(ssl.newHandler(ch.alloc()));
             }

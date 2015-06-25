@@ -1,0 +1,12 @@
+PROJECT_HOME = ../../..
+BUILD_DIR ?= $(PROJECT_HOME)/build/make
+
+include $(BUILD_DIR)/make.defs
+
+CPPSRCS += RPC.cc
+OBJS += $(addprefix $(OUTDIR)/,$(CPPSRCS:.cc=$(OBJ_SUFFIX)))
+
+LIB_NAME = MocaRPC
+
+include $(BUILD_DIR)/make.rules
+

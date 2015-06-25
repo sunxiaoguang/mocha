@@ -20,6 +20,16 @@
   <target name="compile" depends="common-compile, common-compile-test" />
 
   <target name="package" depends="common-package"/>
+  <target name="fat-jar" depends="compile">
+    <jar destfile="${build.lib.dir}/moca-rpc-test.jar">
+      <fileset dir="${classes.dir}"/>
+      <fileset dir="${test.classes.dir}"/>
+      <zipfileset src="${slf4j-1.7.10.home}/slf4j-api-1.7.10.jar"/>
+      <zipfileset src="${slf4j-1.7.10.home}/slf4j-simple-1.7.10.jar"/>
+      <zipfileset src="${netty-4.0.26.home}/jar/all-in-one/netty-all-4.0.26.Final.jar"/>
+      <zipfileset src="core/output/lib/moca-core-current.jar"/>
+    </jar>
+  </target>
 
   <target name="clean" depends="common-clean" />
 </project>
