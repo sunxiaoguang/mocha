@@ -1,5 +1,5 @@
-#ifndef __MOCA_RPC__H__
-#define __MOCA_RPC__H__ 1
+#ifndef __MOCA_RPC_H__
+#define __MOCA_RPC_H__ 1
 #include "RPCDecl.h"
 
 #ifdef MOCA_RPC_HAS_STL

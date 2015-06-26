@@ -159,100 +159,6 @@ StringLite::assign(const char *str, size_t len)
   size_ = len;
 }
 
-static int32_t convertError()
-{
-  switch (errno) {
-    case EACCES:
-      return RPC_NO_ACCESS;
-    case EAFNOSUPPORT:
-    case EPROTOTYPE:
-      return RPC_NOT_SUPPORTED;
-    case EMFILE:
-    case ENFILE:
-      return RPC_TOO_MANY_OPEN_FILE;
-    case ENOBUFS:
-      return RPC_INSUFFICIENT_RESOURCE;
-    case ENOMEM:
-      return RPC_OUT_OF_MEMORY;
-    case EFAULT:
-    case EINVAL:
-    case EBADF:
-      return RPC_INVALID_ARGUMENT;
-    case ECONNRESET:
-    case EPIPE:
-    case EDESTADDRREQ:
-    case ENOTCONN:
-      return RPC_ILLEGAL_STATE;
-    case ENETDOWN:
-    case ENETUNREACH:
-      return RPC_CAN_NOT_CONNECT;
-    case EWOULDBLOCK:
-    case ETIMEDOUT:
-      return RPC_TIMEOUT;
-    default:
-      return RPC_INTERNAL_ERROR;
-  }
-}
-
-static int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize)
-{
-  ssize_t wrote = 0;
-  size_t left = *iovsize;
-  int32_t st = RPC_OK;
-  while (left > 0) {
-    wrote = writev(fd, iov, left);
-    if (wrote == -1) {
-      if (errno == EAGAIN || errno == EINTR) {
-        continue;
-      } else {
-        st = convertError();
-        break;
-      }
-    } else if (wrote > 0) {
-      size_t iovcount = left;
-      for (size_t idx = 0; idx < iovcount; ++idx) {
-        wrote -= iov[idx].iov_len;
-        if (wrote >= 0) {
-          left--;
-          if (wrote == 0) {
-            break;
-          }
-        } else if (wrote < 0) {
-          iov[idx].iov_base = unsafeGet<char>(iov[idx].iov_base, iov[idx].iov_len + wrote);
-          iov[idx].iov_len = -wrote;
-          break;
-        }
-      }
-      if (left != iovcount) {
-        iov += iovcount - left;
-      }
-    } else {
-      break;
-    }
-  }
-
-  *iovsize = *iovsize - left;
-  return st;
-}
-
-static int32_t writeFully(int fd, iovec *iov, size_t *iovsize)
-{
-  size_t offset = 0;
-  int32_t st = RPC_OK;
-  size_t left = *iovsize;
-  while (st == RPC_OK && left > 0) {
-    size_t size = left;
-    if (size > IOV_MAX) {
-      size = IOV_MAX;
-    }
-    st = doWriteFully(fd, iov + offset, &size);
-    offset += size;
-    left -= size;
-  }
-  *iovsize = *iovsize - left;
-  return st;
-}
-
 time_t getDeadline(int64_t timeout)
 {
   time_t sec = timeout / 1000000;
@@ -381,7 +287,7 @@ private:
 
 private:
   RPCClient *wrapper_;
-  int32_t fd_;
+  mutable int32_t fd_;
   mutable int32_t refcount_;
   int64_t timeout_;
   int64_t keepalive_;
@@ -509,13 +415,13 @@ private:
 
   void dispatchHint(PacketEventData *data);
 
-  int32_t doFireEvent(int32_t eventType, RPCOpaqueData eventData);
-  int32_t fireConnectEvent() { return doFireEvent(EVENT_TYPE_CONNECTED, NULL); }
-  int32_t fireEstablishedEvent() { return doFireEvent(EVENT_TYPE_ESTABLISHED, NULL); }
-  int32_t fireDisconnectEvent() { return doFireEvent(EVENT_TYPE_DISCONNECTED, NULL); }
+  int32_t doFireEvent(int32_t eventType, RPCOpaqueData eventData) const;
+  int32_t fireConnectedEvent() const { return doFireEvent(EVENT_TYPE_CONNECTED, NULL); }
+  int32_t fireEstablishedEvent() const { return doFireEvent(EVENT_TYPE_ESTABLISHED, NULL); }
+  int32_t fireDisconnectedEvent() const { return doFireEvent(EVENT_TYPE_DISCONNECTED, NULL); }
   int32_t firePacketEvent();
   int32_t firePayloadEvent(size_t size, const char *payload, bool commit);
-  int32_t fireErrorEvent(int32_t status, const char *message);
+  int32_t fireErrorEvent(int32_t status, const char *message) const;
   int32_t doSendPacket(int64_t id, int32_t code, int32_t type, const KeyValuePairs<StringLite, StringLite> *headers,
       const void *payload, size_t payloadSize) const
   {
@@ -566,6 +472,9 @@ private:
   void transferToPending(const iovec *iov, size_t iovsize) const;
 
   void notifyDispatcherThread() const;
+  int32_t convertError() const;
+  int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize) const;
+  int32_t writeFully(int fd, iovec *iov, size_t *iovsize) const;
 
 public:
   RPCClientImpl();
@@ -577,7 +486,7 @@ public:
   int32_t removeListener(EventListener listener);
   int32_t loop(int32_t flags);
   int32_t breakLoop();
-  void close();
+  void close() const;
   int32_t keepalive() const
   {
     return doSendPacket(nextRequestId(), HINT_CODE_KEEPALIVE, PACKET_TYPE_HINT, NULL, NULL, 0);
@@ -601,6 +510,121 @@ public:
 };
 
 int32_t RPCClientImpl::emptyData_ = 0;
+
+int32_t RPCClientImpl::convertError() const
+{
+  int32_t st;
+  switch (errno) {
+    case EACCES:
+      st = RPC_NO_ACCESS;
+      break;
+    case EAFNOSUPPORT:
+    case EPROTOTYPE:
+      st = RPC_NOT_SUPPORTED;
+      break;
+    case EMFILE:
+    case ENFILE:
+      st = RPC_TOO_MANY_OPEN_FILE;
+      break;
+    case ENOBUFS:
+      st = RPC_INSUFFICIENT_RESOURCE;
+      break;
+    case ENOMEM:
+      st = RPC_OUT_OF_MEMORY;
+      break;
+    case EFAULT:
+    case EINVAL:
+    case EBADF:
+      st = RPC_INVALID_ARGUMENT;
+      break;
+    case ENETDOWN:
+    case ENETUNREACH:
+    case ECONNRESET:
+    case EPIPE:
+    case EDESTADDRREQ:
+    case ENOTCONN:
+      st = RPC_DISCONNECTED;
+      break;
+    case EWOULDBLOCK:
+      st = RPC_WOULDBLOCK;
+      break;
+    case ETIMEDOUT:
+      st = RPC_TIMEOUT;
+      break;
+    default:
+      st = RPC_INTERNAL_ERROR;
+      break;
+  }
+
+  if (st == RPC_DISCONNECTED) {
+    close();
+    fireDisconnectedEvent();
+  } else {
+    fireErrorEvent(st, NULL);
+  }
+  return st;
+}
+
+int32_t
+RPCClientImpl::doWriteFully(int fd, iovec *iov, size_t *iovsize) const
+{
+  ssize_t wrote = 0;
+  size_t left = *iovsize;
+  int32_t st = RPC_OK;
+  while (left > 0) {
+    wrote = writev(fd, iov, left);
+    if (wrote == -1) {
+      if (errno == EAGAIN || errno == EINTR) {
+        continue;
+      } else {
+        st = convertError();
+        break;
+      }
+    } else if (wrote > 0) {
+      size_t iovcount = left;
+      for (size_t idx = 0; idx < iovcount; ++idx) {
+        wrote -= iov[idx].iov_len;
+        if (wrote >= 0) {
+          left--;
+          if (wrote == 0) {
+            break;
+          }
+        } else if (wrote < 0) {
+          iov[idx].iov_base = unsafeGet<char>(iov[idx].iov_base, iov[idx].iov_len + wrote);
+          iov[idx].iov_len = -wrote;
+          break;
+        }
+      }
+      if (left != iovcount) {
+        iov += iovcount - left;
+      }
+    } else {
+      break;
+    }
+  }
+
+  *iovsize = *iovsize - left;
+  return st;
+}
+
+int32_t
+RPCClientImpl::writeFully(int fd, iovec *iov, size_t *iovsize) const
+{
+  size_t offset = 0;
+  int32_t st = RPC_OK;
+  size_t left = *iovsize;
+  while (st == RPC_OK && left > 0) {
+    size_t size = left;
+    if (size > IOV_MAX) {
+      size = IOV_MAX;
+    }
+    st = doWriteFully(fd, iov + offset, &size);
+    offset += size;
+    left -= size;
+  }
+  *iovsize = *iovsize - left;
+  return st;
+}
 
 int32_t
 RPCClientImpl::serialize(const StringLite &data, ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextBuffer, int32_t *totalSize, int32_t *numBuffers) const
@@ -708,12 +732,12 @@ RPCClientImpl::checkAndGetBuffer()
 }
 
 int32_t
-RPCClientImpl::doFireEvent(int32_t eventType, RPCOpaqueData eventData)
+RPCClientImpl::doFireEvent(int32_t eventType, RPCOpaqueData eventData) const
 {
   lock();
 
   for (int32_t idx = 0, size = listeners_.size(); idx < size; ++idx) {
-    EventListenerHandle *handle = listeners_.get(idx);
+    const EventListenerHandle *handle = listeners_.get(idx);
     if (handle->listener && (handle->mask & eventType)) {
       handle->listener(wrapper_, eventType, eventData, handle->userData);
     }
@@ -757,14 +781,17 @@ RPCClientImpl::firePayloadEvent(size_t size, const char *payload, bool commit)
 }
 
 int32_t
-RPCClientImpl::fireErrorEvent(int32_t status, const char *message)
+RPCClientImpl::fireErrorEvent(int32_t status, const char *message) const
 {
+  if (message == NULL) {
+    message = errorString(status);
+  }
   ErrorEventData data = { status, message };
   return doFireEvent(EVENT_TYPE_ERROR, &data);
 }
 
 void
-RPCClientImpl::close()
+RPCClientImpl::close() const
 {
   if (fd_ >= 0) {
     ::close(fd_);
@@ -981,7 +1008,7 @@ RPCClientImpl::connect(const char *address)
 
   fdset_[1].fd = fd_;
   fdset_[1].events = POLLHUP | POLLIN;
-  fireConnectEvent();
+  fireConnectedEvent();
   rc = sendNegotiation();
 
 cleanupExit:
@@ -1544,7 +1571,7 @@ RPCClientImpl::loop(int32_t flags)
         while (read(pipe_[0], &emptyData_, sizeof(emptyData_)) > 0);
       }
     } else if (st == 0) {
-      if (realTimeout == 0) {
+      if ((flags & RPCClient::LOOP_FLAG_NONBLOCK) == 0) {
         if (!hasRead) {
           st = RPC_WOULDBLOCK;
         }

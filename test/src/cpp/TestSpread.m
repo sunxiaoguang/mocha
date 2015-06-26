@@ -80,7 +80,7 @@ int64_t authRequestId = 0;
   NSLog(@"Headers: %@", [event headers]);
   NSLog(@"%d bytes payload", [event payloadSize]);
   if (authRequestId == event.id) {
-    [event.channel request:2 headers:@{@"s":@"0:10:21", @"f":@""} payload:NULL payloadSize:0];
+    [event.channel request:2 headers:@{@"s":@"t.0:t.10:t.21", @"f":@""} payload:NULL payloadSize:0];
   }
 }
 
@@ -108,7 +108,7 @@ int main(int argc, const char **argv)
     NSLog(@"Could not create");
     return 1;
   }
-  if ([channel connect:@"192.168.80.41:1234"] != 0) {
+  if ([channel connect:@"127.0.0.1:1234"] != 0) {
     NSLog(@"Could not connect");
     return 1;
   }
