@@ -426,7 +426,7 @@ private:
       const void *payload, size_t payloadSize) const
   {
     if (getState() <= STATE_NEGOTIATION_PEER_ID) {
-      return RPC_ILLEGAL_STATE;
+      return processErrorHook(RPC_ILLEGAL_STATE);
     }
     if (isDispatcherThread()) {
       return doSendPacketDispatcherThread(id, code, type, headers, payload, payloadSize);
@@ -472,6 +472,7 @@ private:
   void transferToPending(const iovec *iov, size_t iovsize) const;
 
   void notifyDispatcherThread() const;
+  int32_t processErrorHook(int32_t status) const;
   int32_t convertError() const;
   int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize) const;
   int32_t writeFully(int fd, iovec *iov, size_t *iovsize) const;
@@ -510,6 +511,18 @@ public:
 };
 
 int32_t RPCClientImpl::emptyData_ = 0;
+
+int32_t
+RPCClientImpl::processErrorHook(int32_t status) const
+{
+  if (status == RPC_DISCONNECTED) {
+    close();
+    fireDisconnectedEvent();
+  } else {
+    fireErrorEvent(status, NULL);
+  }
+  return status;
+}
 
 int32_t RPCClientImpl::convertError() const
 {
@@ -556,13 +569,7 @@ int32_t RPCClientImpl::convertError() const
       break;
   }
 
-  if (st == RPC_DISCONNECTED) {
-    close();
-    fireDisconnectedEvent();
-  } else {
-    fireErrorEvent(st, NULL);
-  }
-  return st;
+  return processErrorHook(st);
 }
 
 int32_t
@@ -631,7 +638,7 @@ RPCClientImpl::serialize(const StringLite &data, ChainedBuffer **head, ChainedBu
 {
   size_t required = sizeof(int32_t) + data.size() + 1;
   if (required > MAX_INT32) {
-    return RPC_INVALID_ARGUMENT;
+    return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   ChainedBuffer *buffer = ChainedBuffer::checkBuffer(head, current, nextBuffer, numBuffers, required);
   *totalSize += required;
@@ -671,17 +678,17 @@ int32_t
 RPCClientImpl::deserialize(bool swap, void *buffer, size_t *available, StringLite *data)
 {
   if (*available < 4) {
-    return RPC_CORRUPTED_DATA;
+    return processErrorHook(RPC_CORRUPTED_DATA);
   }
   int32_t size = *unsafeGet<int32_t>(buffer, 0);
   if (swap) {
     size = INT32_SWAP(size);
   }
   if (size <= 0) {
-    return RPC_CORRUPTED_DATA;
+    return processErrorHook(RPC_CORRUPTED_DATA);
   }
   if (*available < 4 + static_cast<uint32_t>(size)) {
-    return RPC_CORRUPTED_DATA;
+    return processErrorHook(RPC_CORRUPTED_DATA);
   }
   data->assign(unsafeGet<char>(buffer, sizeof(int32_t)), size);
   *available -= 5 + size;
@@ -954,7 +961,7 @@ RPCClientImpl::connect(const char *address)
     ++ptr;
   }
   if (*ptr == '\n') {
-    return RPC_INVALID_ARGUMENT;
+    return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   const char *host = addressCopy.str();
   const char *port = ptr;
@@ -968,7 +975,7 @@ RPCClientImpl::connect(const char *address)
   int32_t rc = getaddrinfo(host, port, &hints, &tmp);
   fd_ = -1;
   if (rc) {
-    return RPC_INVALID_ARGUMENT;
+    return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   struct timeval realTimeout = {static_cast<time_t>(timeout_ / 1000000), static_cast<suseconds_t>(timeout_ % 1000000)};
   const int32_t enabled = 1;
@@ -1013,7 +1020,7 @@ RPCClientImpl::connect(const char *address)
 
 cleanupExit:
   if (fd_ < 0) {
-    st = RPC_CAN_NOT_CONNECT;
+    processErrorHook(st = RPC_CAN_NOT_CONNECT);
   }
   return st;
 }
@@ -1092,7 +1099,7 @@ RPCClientImpl::doReadNegotiationMagic()
       littleEndian_ = true;
       break;
     default:
-      return RPC_INCOMPATIBLE_PROTOCOL;
+      return processErrorHook(RPC_INCOMPATIBLE_PROTOCOL);
   }
   return RPC_OK;
 }
@@ -1126,7 +1133,7 @@ RPCClientImpl::doReadPacketPayloadSize()
   int32_t st = doRead(&requestPayloadSize_, STATE_PACKET_HEADER);
   if (state_ == STATE_PACKET_HEADER) {
     if (requestHeaderSize_ < 0 || requestPayloadSize_ < 0) {
-      return RPC_INCOMPATIBLE_PROTOCOL;
+      return processErrorHook(RPC_INCOMPATIBLE_PROTOCOL);
     }
     if (requestHeaderSize_ == 0) {
       if (requestPayloadSize_ == 0) {
@@ -1244,7 +1251,7 @@ RPCClientImpl::fillBuffer()
         break;
       }
     } else if (rd == 0) {
-      return RPC_DISCONNECTED;
+      return processErrorHook(RPC_DISCONNECTED);
     } else {
       return convertError();
     }
