@@ -37,27 +37,26 @@ typedef enum {
 } MCRPCEventType;
 
 @interface MCRPCEvent : NSObject
-@property (nonatomic, strong) MCRPC * channel;
-- (instancetype) init:(MCRPC *)channel;
+@property (nonatomic, weak, readonly) MCRPC * channel;
 @end
 
 @interface MCRPCPacketEvent : MCRPCEvent
-@property (nonatomic, assign) int64_t id;
-@property (nonatomic, assign) int32_t code;
-@property (nonatomic, assign) int32_t payloadSize;
-@property (nonatomic, strong) NSDictionary *headers;
+@property (nonatomic, assign, readonly) int64_t id;
+@property (nonatomic, assign, readonly) int32_t code;
+@property (nonatomic, assign, readonly) int32_t payloadSize;
+@property (nonatomic, strong, readonly) NSDictionary *headers;
 @end
 
 @interface MCRPCPayloadEvent : MCRPCEvent
-@property (nonatomic, assign) int64_t id;
-@property (nonatomic, assign) bool commit;
-@property (nonatomic, assign) const void *payload;
-@property (nonatomic, assign) int32_t payloadSize;
+@property (nonatomic, assign, readonly) int64_t id;
+@property (nonatomic, assign, readonly) bool commit;
+@property (nonatomic, assign, readonly) const void *payload;
+@property (nonatomic, assign, readonly) int32_t payloadSize;
 @end
 
 @interface MCRPCErrorEvent : MCRPCEvent
-@property (nonatomic, assign) int32_t code;
-@property (nonatomic, strong) NSString *message;
+@property (nonatomic, assign, readonly) int32_t code;
+@property (nonatomic, strong, readonly) NSString *message;
 @end
 
 @protocol MCRPCEventDelegate <NSObject>
@@ -72,11 +71,12 @@ typedef enum {
 @end
 
 @interface MCRPC : NSObject
-@property (nonatomic, strong) id <MCRPCEventDelegate> delegate;
+@property (nonatomic, weak) id <MCRPCEventDelegate> delegate;
 - (instancetype) init:(int64_t)timeout keepalive:(int64_t)keepalive flags:(int32_t)flags delegate:(id)delegate;
 - (instancetype) init:(int64_t)timeout keepalive:(int64_t)keepalive delegate:(id)delegate;
 - (instancetype) init:(int64_t)timeout delegate:(id)delegate;
 - (instancetype) init:(id)delegate;
+- (void) dealloc;
 - (int32_t) connect:(NSString *)address;
 - (int32_t) close;
 - (int32_t) localAddress:(NSString **)address port:(uint16_t *)port;

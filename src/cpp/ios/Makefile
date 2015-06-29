@@ -7,8 +7,8 @@ OCPPSRCS += MCRPC.mm
 
 LIB_NAME = MCRPC
 INCLUDE_DIRS += ../rpc
-LDFLAGS += -std=gnu++11 -stdlib=libc++
-CXXFLAGS += -std=gnu++11 -stdlib=libc++
+LDFLAGS += -std=c++11 -stdlib=libc++
+CXXFLAGS += -std=c++11 -stdlib=libc++ -fobjc-arc 
 
 include $(BUILD_DIR)/make.rules
 

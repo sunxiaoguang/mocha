@@ -238,6 +238,7 @@ private:
   RPCClientImpl *impl_;
 private:
   RPCClient();
+  ~RPCClient();
 
 public:
   enum {
@@ -251,8 +252,6 @@ public:
   };
 
 public:
-  ~RPCClient();
-
   static RPCClient *create(int64_t timeout = 0x7FFFFFFFFFFFFFFFL, int64_t keepalive = 0x7FFFFFFFFFFFFFFFL, int32_t flags = 0);
   int32_t addListener(EventListener listener, RPCOpaqueData userData = NULL, int32_t eventMask = 0xFFFFFFFF);
   int32_t removeListener(EventListener listener);
@@ -272,6 +271,8 @@ public:
     int64_t discarded;
     return request(&discarded, code, headers, payload, payloadSize);
   }
+  void addRef();
+  bool release();
 #ifdef MOCA_RPC_HAS_STL
   int32_t response(int64_t id, int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;
   int32_t request(int64_t *id, int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;

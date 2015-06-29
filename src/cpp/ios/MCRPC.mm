@@ -8,49 +8,54 @@ using namespace moca::rpc;
 {
   self = [super init];
   if (self) {
-    self.channel = channel;
+    self->_channel = channel;
   }
   return self;
 }
 @end
 
 @implementation MCRPCPacketEvent
+- (instancetype) reset:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers
+{
+  self->_id = id;
+  self->_code = code;
+  self->_payloadSize = payloadSize;
+  self->_headers = headers;
+  return self;
+}
+
 - (instancetype) init:(MCRPC *)channel
 {
-  self = [super init:channel];
-  if (self) {
-    self.id = 0;
-    self.code = 0;
-    self.payloadSize = 0;
-    self.headers = [[NSMutableDictionary alloc] init];
-  }
-  return self;
+  return [[super init:channel] reset:0 code:0 payloadSize:0 headers:[[NSDictionary alloc] init]];
 }
 @end
 
 @implementation MCRPCPayloadEvent
+- (instancetype) reset:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize
+{
+  self->_id = id;
+  self->_commit = commit;
+  self->_payload = payload;
+  self->_payloadSize = payloadSize;
+  return self;
+}
 - (instancetype) init:(MCRPC *)channel
 {
-  self = [super init:channel];
-  if (self) {
-    self.id = 0;
-    self.commit = false;
-    self.payload = NULL;
-    self.payloadSize = 0;
-  }
-  return self;
+  return [[super init:channel] reset:0 commit:false payload:NULL payloadSize:0];
 }
 @end
 
 @implementation MCRPCErrorEvent
+- (instancetype) reset:(int32_t)code message:(NSString *)message
+{
+  self->_code = code;
+  self->_message = message;
+  return self;
+}
+
 - (instancetype) init:(MCRPC *)channel
 {
-  self = [super init:channel];
-  if (self) {
-    self.code = 0;
-    self.message = NULL;
-  }
-  return self;
+  return [[super init:channel] reset:0 message:NULL];
 }
 @end
 
@@ -87,29 +92,19 @@ NSMutableDictionary *convert(const KeyValuePairs<StringLite, StringLite>* src)
 MCRPCPacketEvent *convert(RPCOpaqueData src, MCRPCPacketEvent *dest)
 {
   PacketEventData *eventData = static_cast<PacketEventData *>(src);
-  dest.id = eventData->id;
-  dest.code = eventData->code;
-  dest.payloadSize = eventData->payloadSize;
-  dest.headers = convert(eventData->headers);
-  return dest;
+  return [dest reset:eventData->id code:eventData->code payloadSize:eventData->payloadSize headers:convert(eventData->headers)];
 }
 
 MCRPCPayloadEvent *convert(RPCOpaqueData src, MCRPCPayloadEvent *dest)
 {
   PayloadEventData *eventData = static_cast<PayloadEventData *>(src);
-  dest.id = eventData->id;
-  dest.commit = eventData->commit;
-  dest.payload = eventData->payload;
-  dest.payloadSize = eventData->size;
-  return dest;
+  return [dest reset:eventData->id commit:eventData->commit payload:eventData->payload payloadSize:eventData->size];
 }
 
 MCRPCErrorEvent *convert(RPCOpaqueData src, MCRPCErrorEvent *dest)
 {
   ErrorEventData *eventData = static_cast<ErrorEventData *>(src);
-  dest.code = eventData->code;
-  dest.message = [NSString stringWithUTF8String:eventData->message.str()];
-  return dest;
+  return [dest reset:eventData->code message:[NSString stringWithUTF8String:eventData->message.str()]];
 }
 
 void rpcEventListener(const RPCClient *client, int32_t eventType,
@@ -251,6 +246,12 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
 - (int32_t) keepalive
 {
   return client->keepalive();
+}
+
+- (void) dealloc
+{
+  client->removeListener(rpcEventListener);
+  client->release();
 }
 
 - (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize

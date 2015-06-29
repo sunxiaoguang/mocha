@@ -1,7 +1,5 @@
 #import "MCRPC.h"
 
-int64_t authRequestId = 0;
-
 @interface EventDelegate : NSObject<MCRPCEventDelegate>
 @property (nonatomic, strong) NSString *remoteAddress;
 @property (nonatomic, assign) uint16_t remotePort;
@@ -48,7 +46,7 @@ int64_t authRequestId = 0;
 {
   [self extract:event];
   NSLog(@"Session to server %@@%@:%hu from %@@%@:%hu is established", self.remoteId, self.remoteAddress, self.remotePort, self.localId, self.localAddress, self.localPort);
-  [event.channel request:&authRequestId code:1 headers:@{@"u":@"1", @"s":@"s", @"k":@"k"} payload:NULL payloadSize:0];
+  [event.channel request:2 headers:@{@"s":@"t.0:t.10:t.21:l.0", @"f":@""} payload:NULL payloadSize:0];
 }
 
 - (void) onDisconnected:(MCRPCEvent *)event
@@ -79,9 +77,6 @@ int64_t authRequestId = 0;
   NSLog(@"Code: %d", [event code]);
   NSLog(@"Headers: %@", [event headers]);
   NSLog(@"%d bytes payload", [event payloadSize]);
-  if (authRequestId == event.id) {
-    [event.channel request:2 headers:@{@"s":@"t.0:t.10:t.21", @"f":@""} payload:NULL payloadSize:0];
-  }
 }
 
 - (void) onPayload:(MCRPCPayloadEvent *)event
@@ -94,7 +89,6 @@ int64_t authRequestId = 0;
 
 - (void) onError:(MCRPCErrorEvent *)event
 {
-  [self extract:event];
   NSLog(@"Error %d:%@", [event code], [event message]);
 }
 
@@ -102,13 +96,17 @@ int64_t authRequestId = 0;
 
 int main(int argc, const char **argv)
 {
+  if (argc < 2) {
+    NSLog(@"Missing required argument");
+    return 1;
+  }
   EventDelegate *delegate = [[EventDelegate alloc] init];
   MCRPC *channel = [[MCRPC alloc] init:delegate];
   if (!channel) {
     NSLog(@"Could not create");
     return 1;
   }
-  if ([channel connect:@"127.0.0.1:1234"] != 0) {
+  if ([channel connect:[NSString stringWithUTF8String:argv[1]]] != 0) {
     NSLog(@"Could not connect");
     return 1;
   }

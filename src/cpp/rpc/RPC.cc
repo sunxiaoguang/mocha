@@ -350,9 +350,7 @@ private:
   void lockState() const { lock(&stateMutex_); }
   void unlockState() const { unlock(&stateMutex_); }
 
-  bool release() const;
   bool releaseLocked() const;
-  void addRef() const;
   void addRefLocked() const;
   int64_t nextRequestId() const;
 
@@ -508,6 +506,8 @@ public:
   int32_t localId(StringLite *localId) const;
   int32_t remoteId(StringLite *remoteId) const;
   int32_t checkAndSendPendingPackets();
+  void addRef() const;
+  bool release() const;
 };
 
 int32_t RPCClientImpl::emptyData_ = 0;
@@ -1607,6 +1607,7 @@ RPCClientImpl::loop(int32_t flags)
   running_ = false;
 
 cleanupExit:
+  releaseLocked();
   unlock();
 
   return st;
@@ -1801,6 +1802,18 @@ int32_t
 RPCClient::remoteId(StringLite *remoteId) const
 {
   return impl_->remoteId(remoteId);
+}
+
+void
+RPCClient::addRef()
+{
+  impl_->addRef();
+}
+
+bool
+RPCClient::release()
+{
+  return impl_->release();
 }
 
 int32_t
