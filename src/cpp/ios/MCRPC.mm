@@ -3,69 +3,9 @@
 
 using namespace moca::rpc;
 
-@implementation MCRPCEvent
-- (instancetype) init:(MCRPC *)channel
-{
-  self = [super init];
-  if (self) {
-    self->_channel = channel;
-  }
-  return self;
-}
-@end
-
-@implementation MCRPCPacketEvent
-- (instancetype) reset:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers
-{
-  self->_id = id;
-  self->_code = code;
-  self->_payloadSize = payloadSize;
-  self->_headers = headers;
-  return self;
-}
-
-- (instancetype) init:(MCRPC *)channel
-{
-  return [[super init:channel] reset:0 code:0 payloadSize:0 headers:[[NSDictionary alloc] init]];
-}
-@end
-
-@implementation MCRPCPayloadEvent
-- (instancetype) reset:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize
-{
-  self->_id = id;
-  self->_commit = commit;
-  self->_payload = payload;
-  self->_payloadSize = payloadSize;
-  return self;
-}
-- (instancetype) init:(MCRPC *)channel
-{
-  return [[super init:channel] reset:0 commit:false payload:NULL payloadSize:0];
-}
-@end
-
-@implementation MCRPCErrorEvent
-- (instancetype) reset:(int32_t)code message:(NSString *)message
-{
-  self->_code = code;
-  self->_message = message;
-  return self;
-}
-
-- (instancetype) init:(MCRPC *)channel
-{
-  return [[super init:channel] reset:0 message:NULL];
-}
-@end
-
 @interface MCRPC()
 {
   RPCClient *client;
-  MCRPCEvent *event;
-  MCRPCPacketEvent *packetEvent;
-  MCRPCPayloadEvent *payloadEvent;
-  MCRPCErrorEvent *errorEvent;
 }
 @end
 
@@ -89,49 +29,49 @@ NSMutableDictionary *convert(const KeyValuePairs<StringLite, StringLite>* src)
   return dest;
 }
 
-MCRPCPacketEvent *convert(RPCOpaqueData src, MCRPCPacketEvent *dest)
-{
-  PacketEventData *eventData = static_cast<PacketEventData *>(src);
-  return [dest reset:eventData->id code:eventData->code payloadSize:eventData->payloadSize headers:convert(eventData->headers)];
-}
-
-MCRPCPayloadEvent *convert(RPCOpaqueData src, MCRPCPayloadEvent *dest)
-{
-  PayloadEventData *eventData = static_cast<PayloadEventData *>(src);
-  return [dest reset:eventData->id commit:eventData->commit payload:eventData->payload payloadSize:eventData->size];
-}
-
-MCRPCErrorEvent *convert(RPCOpaqueData src, MCRPCErrorEvent *dest)
-{
-  ErrorEventData *eventData = static_cast<ErrorEventData *>(src);
-  return [dest reset:eventData->code message:[NSString stringWithUTF8String:eventData->message.str()]];
-}
-
 void rpcEventListener(const RPCClient *client, int32_t eventType,
     RPCOpaqueData eventData, ::moca::rpc::RPCOpaqueData userData)
 {
   MCRPC *channel = (__bridge MCRPC *) userData;
   switch (eventType) {
     case EVENT_TYPE_CONNECTED:
-      [channel.delegate onConnected:channel->event];
+      if ([channel.delegate respondsToSelector:@selector(onConnected:)]) {
+        [channel.delegate onConnected:channel];
+      }
       break;
     case EVENT_TYPE_ESTABLISHED:
-      [channel.delegate onEstablished:channel->event];
+      if ([channel.delegate respondsToSelector:@selector(onEstablished:)]) {
+        [channel.delegate onEstablished:channel];
+      }
       break;
     case EVENT_TYPE_DISCONNECTED:
-      [channel.delegate onDisconnected:channel->event];
+      if ([channel.delegate respondsToSelector:@selector(onDisconnected:)]) {
+        [channel.delegate onDisconnected:channel];
+      }
       break;
     case EVENT_TYPE_REQUEST:
-      [channel.delegate onRequest:convert(eventData, channel->packetEvent)];
+      if ([channel.delegate respondsToSelector:@selector(onRequest: id: code: payloadSize: headers:)]) {
+        PacketEventData *event = static_cast<PacketEventData *>(eventData);
+        [channel.delegate onRequest:channel id:event->id code:event->code payloadSize:event->payloadSize headers:convert(event->headers)];
+      }
       break;
     case EVENT_TYPE_RESPONSE:
-      [channel.delegate onResponse:convert(eventData, channel->packetEvent)];
+      if ([channel.delegate respondsToSelector:@selector(onResponse: id: code: payloadSize: headers:)]) {
+        PacketEventData *event = static_cast<PacketEventData *>(eventData);
+        [channel.delegate onResponse:channel id:event->id code:event->code payloadSize:event->payloadSize headers:convert(event->headers)];
+      }
       break;
     case EVENT_TYPE_PAYLOAD:
-      [channel.delegate onPayload:convert(eventData, channel->payloadEvent)];
+      if ([channel.delegate respondsToSelector:@selector(onPayload: id: commit: payload: payloadSize:)]) {
+        PayloadEventData *event = static_cast<PayloadEventData *>(eventData);
+        [channel.delegate onPayload:channel id:event->id commit:event->commit payload:event->payload payloadSize:event->size];
+      }
       break;
     case EVENT_TYPE_ERROR:
-      [channel.delegate onError:convert(eventData, channel->errorEvent)];
+      if ([channel.delegate respondsToSelector:@selector(onError: code: message:)]) {
+        ErrorEventData *event = static_cast<ErrorEventData *>(eventData);
+        [channel.delegate onError:channel code:event->code message:[NSString stringWithUTF8String:event->message.str()]];
+      }
       break;
     default:
       break;
@@ -144,10 +84,6 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
   if (self) {
     self.delegate = delegate;
     self->client = RPCClient::create(timeout, keepalive, flags);
-    self->event = [[MCRPCEvent alloc] init:self];
-    self->packetEvent = [[MCRPCPacketEvent alloc] init:self];
-    self->payloadEvent = [[MCRPCPayloadEvent alloc] init:self];
-    self->errorEvent = [[MCRPCErrorEvent alloc] init:self];
     self->client->addListener(rpcEventListener, (__bridge void *) self);
   }
   return self;

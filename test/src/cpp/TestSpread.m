@@ -7,20 +7,19 @@
 @property (nonatomic, assign) uint16_t localPort;
 @property (nonatomic, strong) NSString *remoteId;
 @property (nonatomic, strong) NSString *localId;
-- (void) extract:(MCRPCEvent *)event;
-- (void) onConnected:(MCRPCEvent *)event;
-- (void) onEstablished:(MCRPCEvent *)event;
-- (void) onDisconnected:(MCRPCEvent *)event;
-- (void) onRequest:(MCRPCPacketEvent *)event;
-- (void) onResponse:(MCRPCPacketEvent *)event;
-- (void) onPayload:(MCRPCPayloadEvent *)event;
-- (void) onError:(MCRPCErrorEvent *)event;
+- (void) extract:(MCRPC *)channel;
+- (void) onConnected:(MCRPC *)channel;
+- (void) onEstablished:(MCRPC *)channel;
+- (void) onDisconnected:(MCRPC *)channel;
+- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
+- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
+- (void) onPayload:(MCRPC *)channel id:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize;
+- (void) onError:(MCRPC *)channel code:(int32_t)code message:(NSString *)message;
 @end
 
 @implementation EventDelegate
-- (void) extract:(MCRPCEvent *)event
+- (void) extract:(MCRPC *)channel
 {
-  MCRPC *channel = event.channel;
   NSString *address = NULL;
   uint16_t port;
   [channel remoteAddress:&address port:&port];
@@ -36,60 +35,60 @@
   self.localId = id;
 }
 
-- (void) onConnected:(MCRPCEvent *)event
+- (void) onConnected:(MCRPC *)channel
 {
-  [self extract:event];
+  [self extract:channel];
   NSLog(@"Connected to server %@@%@:%hu from %@@%@:%hu", self.remoteId, self.remoteAddress, self.remotePort, self.localId, self.localAddress, self.localPort);
 }
 
-- (void) onEstablished:(MCRPCEvent *)event
+- (void) onEstablished:(MCRPC *)channel
 {
-  [self extract:event];
+  [self extract:channel];
   NSLog(@"Session to server %@@%@:%hu from %@@%@:%hu is established", self.remoteId, self.remoteAddress, self.remotePort, self.localId, self.localAddress, self.localPort);
-  [event.channel request:2 headers:@{@"s":@"t.0:t.10:t.21:l.0", @"f":@""} payload:NULL payloadSize:0];
+  [channel request:2 headers:@{@"s":@"t.0:t.10:t.21:l.0", @"f":@""} payload:NULL payloadSize:0];
 }
 
-- (void) onDisconnected:(MCRPCEvent *)event
+- (void) onDisconnected:(MCRPC *)channel
 {
-  [self extract:event];
+  [self extract:channel];
   NSLog(@"Disconnected from server");
 }
 
-- (void) onRequest:(MCRPCPacketEvent *)event
+- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers
 {
-  [self extract:event];
-  NSLog(@"Request %lld from server %@@%@:%hu", [event id], self.remoteId, self.remoteAddress, self.remotePort);
-  NSLog(@"Code: %d", [event code]);
-  NSLog(@"Headers: %@", [event headers]);
-  NSLog(@"%d bytes payload", [event payloadSize]);
-  [event.channel response:[event id] code:([event code]- 100) headers:[event headers] payload:NULL payloadSize:0];
-  if ([event code] == 4) {
+  [self extract:channel];
+  NSLog(@"Request %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);
+  NSLog(@"Code: %d", code);
+  NSLog(@"Headers: %@", headers);
+  NSLog(@"%d bytes payload", payloadSize);
+  [channel response:id code:(code - 100) headers:headers payload:NULL payloadSize:0];
+  if (code == 4) {
     NSLog(@"Broadcast");
   } else {
     NSLog(@"Publish");
   }
 }
 
-- (void) onResponse:(MCRPCPacketEvent *)event
+- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers
 {
-  [self extract:event];
-  NSLog(@"Response %lld from server %@@%@:%hu", [event id], self.remoteId, self.remoteAddress, self.remotePort);
-  NSLog(@"Code: %d", [event code]);
-  NSLog(@"Headers: %@", [event headers]);
-  NSLog(@"%d bytes payload", [event payloadSize]);
+  [self extract:channel];
+  NSLog(@"Response %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);
+  NSLog(@"Code: %d", code);
+  NSLog(@"Headers: %@", headers);
+  NSLog(@"%d bytes payload", payloadSize);
 }
 
-- (void) onPayload:(MCRPCPayloadEvent *)event
+- (void) onPayload:(MCRPC *)channel id:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize
 {
-  [self extract:event];
-  NSLog(@"Payload of request %lld from server %@@%@:%hu", [event id], self.remoteId, self.remoteAddress, self.remotePort);
-  NSLog(@"Size : %d", [event payloadSize]);
-  NSLog(@"Commit : %@", [event commit] ? @"true" : @"false");
+  [self extract:channel];
+  NSLog(@"Payload of request %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);
+  NSLog(@"Size : %d", payloadSize);
+  NSLog(@"Commit : %@", commit ? @"true" : @"false");
 }
 
-- (void) onError:(MCRPCErrorEvent *)event
+- (void) onError:(MCRPC *)channel code:(int32_t)code message:(NSString *)message;
 {
-  NSLog(@"Error %d:%@", [event code], [event message]);
+  NSLog(@"Error %d:%@", code, message);
 }
 
 @end

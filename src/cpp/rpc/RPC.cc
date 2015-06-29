@@ -1578,9 +1578,11 @@ RPCClientImpl::loop(int32_t flags)
         while (read(pipe_[0], &emptyData_, sizeof(emptyData_)) > 0);
       }
     } else if (st == 0) {
-      if ((flags & RPCClient::LOOP_FLAG_NONBLOCK) == 0) {
+      if ((flags & RPCClient::LOOP_FLAG_NONBLOCK)) {
         if (!hasRead) {
           st = RPC_WOULDBLOCK;
+        } else {
+          break;
         }
       } else {
         timeval now;

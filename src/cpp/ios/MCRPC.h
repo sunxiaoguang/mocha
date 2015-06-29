@@ -25,49 +25,15 @@ typedef enum {
   MC_RPC_LOOP_FLAG_NONBLOCK = 2,
 } MCRPCLoopFlag;
 
-typedef enum {
-  MC_RPC_EVENT_TYPE_CONNECTED = 1 << 0,
-  MC_RPC_EVENT_TYPE_ESTABLISHED = 1 << 1,
-  MC_RPC_EVENT_TYPE_DISCONNECTED = 1 << 2,
-  MC_RPC_EVENT_TYPE_REQUEST = 1 << 3,
-  MC_RPC_EVENT_TYPE_RESPONSE = 1 << 4,
-  MC_RPC_EVENT_TYPE_PAYLOAD = 1 << 5,
-  MC_RPC_EVENT_TYPE_ERROR = 1 << 6,
-  MC_RPC_EVENT_TYPE_ALL = 0xFFFFFFFF,
-} MCRPCEventType;
-
-@interface MCRPCEvent : NSObject
-@property (nonatomic, weak, readonly) MCRPC * channel;
-@end
-
-@interface MCRPCPacketEvent : MCRPCEvent
-@property (nonatomic, assign, readonly) int64_t id;
-@property (nonatomic, assign, readonly) int32_t code;
-@property (nonatomic, assign, readonly) int32_t payloadSize;
-@property (nonatomic, strong, readonly) NSDictionary *headers;
-@end
-
-@interface MCRPCPayloadEvent : MCRPCEvent
-@property (nonatomic, assign, readonly) int64_t id;
-@property (nonatomic, assign, readonly) bool commit;
-@property (nonatomic, assign, readonly) const void *payload;
-@property (nonatomic, assign, readonly) int32_t payloadSize;
-@end
-
-@interface MCRPCErrorEvent : MCRPCEvent
-@property (nonatomic, assign, readonly) int32_t code;
-@property (nonatomic, strong, readonly) NSString *message;
-@end
-
 @protocol MCRPCEventDelegate <NSObject>
 @required
-- (void) onConnected:(MCRPCEvent *)event;
-- (void) onEstablished:(MCRPCEvent *)event;
-- (void) onDisconnected:(MCRPCEvent *)event;
-- (void) onRequest:(MCRPCPacketEvent *)event;
-- (void) onResponse:(MCRPCPacketEvent *)event;
-- (void) onPayload:(MCRPCPayloadEvent *)event;
-- (void) onError:(MCRPCErrorEvent *)event;
+- (void) onConnected:(MCRPC *)channel;
+- (void) onEstablished:(MCRPC *)channel;
+- (void) onDisconnected:(MCRPC *)channel;
+- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
+- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
+- (void) onPayload:(MCRPC *)channel id:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize;
+- (void) onError:(MCRPC *)channel code:(int32_t)code message:(NSString *)message;
 @end
 
 @interface MCRPC : NSObject
