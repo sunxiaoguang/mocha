@@ -6,13 +6,21 @@
 #include <sys/uio.h>
 #include <sys/types.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <limits.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <fcntl.h>
-#include <uuid/uuid.h>
+#include <signal.h>
+#include <zlib.h>
+#include <zlib.h>
+#ifndef ANDROID
+  #include <uuid/uuid.h>
+#else
+  #define IOV_MAX (8)
+#endif
 #include <poll.h>
 #include <sys/time.h>
 
@@ -25,6 +33,8 @@ BEGIN_MOCA_RPC_NAMESPACE
    ((value & 0x00ff0000UL) >> 8) | \
    ((value & 0xff000000UL) >> 24) \
   )
+
+#define SECOND (1000000)
 
 #define OFFSET_OF(TYPE, FIELD) (((size_t)(&((TYPE *) sizeof(TYPE))->FIELD)) - sizeof(TYPE))
 #define CHAINED_BUFFER_SIZE(size) MOCA_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
@@ -99,7 +109,7 @@ struct ChainedBuffer
 
   static ChainedBuffer *checkBuffer(ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextAddress, int32_t *numBuffers, size_t required)
   {
-    if (!*current || (*current)->available() < required) {
+    if (!*current || (*current)->available() < static_cast<int32_t>(required)) {
       *current = ChainedBuffer::create(required, nextAddress);
       if (!*head) {
         *head = *current;
@@ -261,6 +271,10 @@ private:
 
 private:
   enum {
+    NEGOTIATION_FLAG_ACCEPT_ZLIB = 1,
+    PACKET_FLAG_HEADER_ZLIB_ENCODED = 1,
+  };
+  enum {
     PACKET_TYPE_REQUEST = 0,
     PACKET_TYPE_RESPONSE = 1,
     PACKET_TYPE_HINT = 2,
@@ -404,6 +418,8 @@ private:
   int32_t doReadPacketHeader();
   int32_t doReadPacketPayload();
   int32_t doStartOver();
+  int32_t doReadPlainPacketHeader();
+  int32_t doReadCompressedPacketHeader();
 
   int32_t doRead();
 
@@ -474,6 +490,8 @@ private:
   int32_t convertError() const;
   int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize) const;
   int32_t writeFully(int fd, iovec *iov, size_t *iovsize) const;
+
+  static void checkAndClose(int32_t fd);
 
 public:
   RPCClientImpl();
@@ -718,15 +736,22 @@ RPCClientImpl::RPCClientImpl() : wrapper_(NULL), fd_(-1), refcount_(1), timeout_
   running_(false), state_(STATE_NEGOTIATION_MAGIC), currentId_(0), writeBuffer_(NULL), readBuffer_(NULL),
   nextBuffer_(&readBuffer_), readAvailable_(0), readBufferOffset_(0), pendingBuffer_(NULL),
   currentPendingBuffer_(NULL), nextPendingBuffer_(&pendingBuffer_), numPendingBuffers_(0), littleEndian_(0),
-  version_(0), flags_(0), peerIdSize_(0), requestId_(0), requestFlags_(0), requestType_(0),
+  version_(0), flags_(NEGOTIATION_FLAG_ACCEPT_ZLIB << 8), peerIdSize_(0), requestId_(0), requestFlags_(0), requestType_(0),
   requestHeaderSize_(0), requestPayloadSize_(0), dispatchedPayloadSize_(0)
 {
+  pipe_[0] = -1;
+  pipe_[1] = -1;
   clearDispatcherThreadId();
 }
 
 RPCClientImpl::~RPCClientImpl()
 {
   close();
+  ChainedBuffer::destroy(&pendingBuffer_);
+  ChainedBuffer::destroy(&readBuffer_);
+  pthread_mutex_destroy(&mutex_);
+  pthread_mutex_destroy(&pendingMutex_);
+  pthread_mutex_destroy(&stateMutex_);
 }
 
 ChainedBuffer *
@@ -798,12 +823,19 @@ RPCClientImpl::fireErrorEvent(int32_t status, const char *message) const
 }
 
 void
+RPCClientImpl::checkAndClose(int32_t fd)
+{
+  if (fd > 0) {
+    ::close(fd);
+  }
+}
+
+void
 RPCClientImpl::close() const
 {
-  if (fd_ >= 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
+  checkAndClose(fd_);
+  checkAndClose(pipe_[0]);
+  checkAndClose(pipe_[1]);
 }
 
 int32_t
@@ -916,11 +948,19 @@ RPCClientImpl::initBuffer()
 int32_t
 RPCClientImpl::initLocalId()
 {
+#ifndef ANDROID
   uuid_t uuid;
   uuid_generate(uuid);
-  uuid_string_t uuidStr;
+  char uuidStr[64];
   uuid_unparse(uuid, uuidStr);
   localId_.assign(uuidStr);
+#else
+  char buffer[32];
+  for (int idx = 0; idx < 8; ++idx) {
+    snprintf(buffer, sizeof(buffer), "%X", rand());
+    localId_.append(buffer);
+  }
+#endif
   return RPC_OK;
 }
 
@@ -972,15 +1012,15 @@ RPCClientImpl::connect(const char *address)
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = PF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
-  int32_t rc = getaddrinfo(host, port, &hints, &tmp);
+  int32_t st = getaddrinfo(host, port, &hints, &tmp);
   fd_ = -1;
-  if (rc) {
+  if (st) {
     return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   struct timeval realTimeout = {static_cast<time_t>(timeout_ / 1000000), static_cast<suseconds_t>(timeout_ % 1000000)};
   const int32_t enabled = 1;
   time_t deadline = getDeadline(timeout_);
-  int32_t st = RPC_OK;
+  st = RPC_OK;
   for (result = tmp; result; result = result->ai_next) {
     if (isTimeout(deadline)) {
       st = RPC_TIMEOUT;
@@ -993,7 +1033,9 @@ RPCClientImpl::connect(const char *address)
     if (setsockopt(fd_, SOL_SOCKET, SO_SNDTIMEO, &realTimeout, sizeof(realTimeout)) ||
         setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &realTimeout, sizeof(realTimeout)) ||
         setsockopt(fd_, SOL_SOCKET, SO_KEEPALIVE, &enabled, sizeof(enabled)) ||
+#ifdef SO_NOSIGPIPE
         setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) ||
+#endif
         setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled))) {
       ::close(fd_);
       fd_ = -1;
@@ -1013,12 +1055,23 @@ RPCClientImpl::connect(const char *address)
     break;
   }
 
-  fdset_[1].fd = fd_;
-  fdset_[1].events = POLLHUP | POLLIN;
-  fireConnectedEvent();
-  rc = sendNegotiation();
+  if (fd_ != -1) {
+    struct sigaction sa;
+    sa.sa_handler = SIG_IGN;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGPIPE, &sa, 0);
+
+    fdset_[1].fd = fd_;
+    fdset_[1].events = POLLHUP | POLLIN;
+    fireConnectedEvent();
+    st = sendNegotiation();
+  }
 
 cleanupExit:
+  if (tmp) {
+    freeaddrinfo(tmp);
+  }
   if (fd_ < 0) {
     processErrorHook(st = RPC_CAN_NOT_CONNECT);
   }
@@ -1055,7 +1108,7 @@ RPCClientImpl::doRead(size_t size, ReadDataSink sink, void *sinkUserData, int32_
     readBufferOffset_ += available;
     size -= available;
     offset += available;
-    if (readBufferOffset_ == readBuffer_->size && readBuffer_ != writeBuffer_) {
+    if (readBufferOffset_ == static_cast<size_t>(readBuffer_->size) && readBuffer_ != writeBuffer_) {
       ChainedBuffer *next = readBuffer_->next;
       free(readBuffer_);
       readBuffer_ = next;
@@ -1147,12 +1200,76 @@ RPCClientImpl::doReadPacketPayloadSize()
 }
 
 int32_t
-RPCClientImpl::doReadPacketHeader()
+RPCClientImpl::doReadCompressedPacketHeader()
 {
-  if (readAvailable_ < requestHeaderSize_) {
-    return RPC_WOULDBLOCK;
+  int32_t st;
+  int32_t state = state_;
+  int32_t originalSize;
+  Bytef *readBuffer = static_cast<Bytef *>(malloc(requestHeaderSize_));
+  Bytef *decompressedBuffer = NULL;
+  char *ptr;
+  int32_t size;
+  uLongf tmp;
+  StringLite key;
+  StringLite value;
+  MOCA_RPC_DO_GOTO(st, doRead(requestHeaderSize_, readBuffer, state), cleanupExit);
+
+  if (requestPayloadSize_ == 0) {
+    setState(STATE_START_OVER);
+  } else {
+    setState(STATE_PACKET_PAYLOAD);
   }
 
+  if (requestHeaderSize_ < 4 + 1) {
+    st = RPC_CORRUPTED_DATA;
+    goto cleanupExit;
+  }
+
+
+  originalSize = safeRead<int32_t>(readBuffer);
+  /* TODO make this configurable */
+  if (originalSize > 67108864) {
+    st = RPC_CORRUPTED_DATA;
+    goto cleanupExit;
+  }
+  ptr = reinterpret_cast<char *>(decompressedBuffer = static_cast<Bytef *>(malloc(originalSize)));
+  tmp = originalSize;
+  if (uncompress(decompressedBuffer, &tmp, readBuffer + sizeof(int32_t), requestHeaderSize_ - sizeof(int32_t)) != Z_OK) {
+    st = RPC_CORRUPTED_DATA;
+    goto cleanupExit;
+  }
+
+  while (originalSize > 0) {
+    size = safeRead<int32_t>(ptr);
+    ptr += sizeof(int32_t);
+    key.append(ptr, size);
+    ptr += size + 1;
+    originalSize -= (size + 1 + sizeof(int32_t));
+    size = safeRead<int32_t>(ptr);
+    ptr += sizeof(int32_t);
+    value.append(ptr, size);
+    ptr += size + 1;
+    originalSize -= (size + 1 + sizeof(int32_t));
+    requestHeaders_.append(key, value);
+  }
+
+  st = firePacketEvent();
+  requestHeaders_.clear();
+
+cleanupExit:
+  if (decompressedBuffer) {
+    free(decompressedBuffer);
+  }
+  if (readBuffer) {
+    free(readBuffer);
+  }
+
+  return st;
+}
+
+int32_t
+RPCClientImpl::doReadPlainPacketHeader()
+{
   size_t endReadAvailable = readAvailable_ - requestHeaderSize_;
 
   int32_t st;
@@ -1186,11 +1303,25 @@ RPCClientImpl::doReadPacketHeader()
   return st;
 }
 
+int32_t
+RPCClientImpl::doReadPacketHeader()
+{
+  if (readAvailable_ < static_cast<size_t>(requestHeaderSize_)) {
+    return RPC_WOULDBLOCK;
+  }
+
+  if (requestFlags_ & PACKET_FLAG_HEADER_ZLIB_ENCODED) {
+    return doReadCompressedPacketHeader();
+  } else {
+    return doReadPlainPacketHeader();
+  }
+}
+
 void
 RPCClientImpl::firePayloadEventSink(void *data, size_t size, void *userData)
 {
   FirePayloadEventSinkArgument *argument = static_cast<FirePayloadEventSinkArgument *>(userData);
-  bool commit = argument->commit && (argument->pending == argument->dispatched + size);
+  bool commit = argument->commit && (static_cast<size_t>(argument->pending) == argument->dispatched + size);
 
   argument->status = argument->client->firePayloadEvent(size, static_cast<char *>(data), commit);
   argument->dispatched += size;
@@ -1204,8 +1335,8 @@ RPCClientImpl::doReadPacketPayload()
   }
 
   int32_t pending = requestPayloadSize_ - dispatchedPayloadSize_;
-  bool commit = pending <= readAvailable_;
-  if (pending > readAvailable_) {
+  bool commit = static_cast<size_t>(pending) <= readAvailable_;
+  if (static_cast<size_t>(pending) > readAvailable_) {
     pending = readAvailable_;
   }
   FirePayloadEventSinkArgument argument = { this, commit, dispatchedPayloadSize_, pending, RPC_OK};
@@ -1408,8 +1539,8 @@ int32_t
 RPCClientImpl::init(RPCClient *wrapper, int64_t timeout, int64_t keepalive, int32_t flags)
 {
   int32_t rc;
-  timeout_ = timeout;
-  keepalive_ = keepalive;
+  timeout_ = timeout < SECOND ? SECOND : timeout;
+  keepalive_ = keepalive < SECOND ? SECOND : keepalive;
   if (MOCA_RPC_FAILED(rc = initBuffer())) {
     return rc;
   }
@@ -1507,7 +1638,7 @@ RPCClientImpl::checkAndSendPendingPackets()
   ChainedBuffer *buffer;
   size_t iovsize = 0;
   size_t totalSize = 0;
-  iovec *iov;
+  iovec *iov = NULL;
   int32_t st = RPC_OK;
   if (numPendingBuffers_ == 0) {
     goto cleanupExit;
@@ -1538,6 +1669,9 @@ RPCClientImpl::checkAndSendPendingPackets()
   numPendingBuffers_ = totalSize - iovsize;
 cleanupExit:
   unlockPending();
+  if (iov) {
+    free(iov);
+  }
   return st;
 }
 
@@ -1577,6 +1711,7 @@ RPCClientImpl::loop(int32_t flags)
       if (fdset_[0].revents & POLLIN) {
         while (read(pipe_[0], &emptyData_, sizeof(emptyData_)) > 0);
       }
+      st = RPC_OK;
     } else if (st == 0) {
       if ((flags & RPCClient::LOOP_FLAG_NONBLOCK)) {
         if (!hasRead) {
@@ -1586,7 +1721,7 @@ RPCClientImpl::loop(int32_t flags)
         }
       } else {
         timeval now;
-        gettimeofday(&start, NULL);
+        gettimeofday(&now, NULL);
         if ((now.tv_sec - start.tv_sec) * 1000000L + (now.tv_usec - start.tv_usec) > timeout_) {
           st = RPC_TIMEOUT;
         } else {
@@ -1695,9 +1830,6 @@ RPCClientImpl::breakLoop()
 RPCClient::RPCClient() : impl_(NULL) { }
 RPCClient::~RPCClient()
 {
-  if (impl_) {
-    delete impl_;
-  }
 }
 
 RPCClient *
@@ -1815,7 +1947,11 @@ RPCClient::addRef()
 bool
 RPCClient::release()
 {
-  return impl_->release();
+  bool released = impl_->release();
+  if (released) {
+    delete this;
+  }
+  return released;
 }
 
 int32_t

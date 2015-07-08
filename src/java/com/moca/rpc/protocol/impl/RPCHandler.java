@@ -21,6 +21,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   protected static final int PACKET_TYPE_HINT = 2;
   protected static final int HINT_CODE_KEEPALIVE = 0;
 
+  protected static final int NEGOTIATION_FLAG_ACCEPT_ZLIB = 1;
+  protected static final int PACKET_FLAG_HEADER_ZLIB_ENCODED = 1;
+
   private static final byte STATE_NEGOTIATION = 0;
   private static final byte STATE_HEADER = 1;
   private static final byte STATE_PAYLOAD = 2;
@@ -36,10 +39,16 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   private int minReadableSize;
   private int limit;
   private ByteOrder channelOrder;
-  private int channelFlags;
-  private int channelVersion;
   private boolean sendNegotiation = false;
   private static final byte[] NULL_TERMINATOR = new byte[1];
+  private static ThreadLocal<byte[]> tlsCompressBuffer = new ThreadLocal<byte[]>()
+  {
+    @Override
+    public byte[] initialValue()
+    {
+      return new byte[4096];
+    }
+  };
 
   private void setMinReadableBytes(int bytes)
   {
@@ -559,14 +568,14 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     ctx.close();
   }
 
-  private void dispatchHint(long packetId, int code, int type, Map<String, String> header, int payloadSize)
+  private void dispatchHint(long packetId, int code, int type, KeyValuePair[] header, int payloadSize)
   {
     if (code == HINT_CODE_KEEPALIVE) {
       return;
     }
   }
 
-  private void dispatchPacket(long packetId, int code, int type, Map<String, String> header, int payloadSize)
+  private void dispatchPacket(long packetId, int code, int type, KeyValuePair[] header, int payloadSize)
   {
     switch (type) {
       case PACKET_TYPE_REQUEST:
@@ -638,8 +647,8 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     checkAndSetState(newState, STATE_HEADER);
     channel.remoteOrder(channelOrder);
     channel.remoteId(negotiationReader.getId());
-    channelFlags = negotiationReader.getFlags();
-    channelVersion = negotiationReader.getVersion();
+    channel.flags(negotiationReader.getFlags());
+    channel.version(negotiationReader.getVersion());
     negotiationReader = null;
     listener.onEstablished(channel);
     toHeader();

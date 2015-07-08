@@ -3,6 +3,26 @@
 
 using namespace moca::rpc;
 
+@implementation MCKeyValuePair
+- (instancetype) init:(NSString *)key value:(NSString *)value
+{
+  self = [super init];
+  if (self) {
+    self.key = key;
+    self.value = value;
+  }
+  return self;
+}
++ (instancetype) alloc:(NSString *)key value:(NSString *)value
+{
+  return [[MCKeyValuePair alloc] init:key value:value];
+}
+- (NSString *) description
+{
+  return [NSString stringWithFormat:@"(%@ => %@)", self.key, self.value];
+}
+@end
+
 @interface MCRPC()
 {
   RPCClient *client;
@@ -11,20 +31,21 @@ using namespace moca::rpc;
 
 @implementation MCRPC
 
-void convert(const NSDictionary *src, KeyValuePairs<StringLite, StringLite>* dest)
+void convert(const NSArray *src, KeyValuePairs<StringLite, StringLite>* dest)
 {
-  for (const NSString *key in src) {
-    const NSString *value = [src objectForKey:key];
-    dest->append([key UTF8String], [value UTF8String]);
+  for (const MCKeyValuePair *pair in src) {
+    dest->append([pair.key UTF8String], [pair.value UTF8String]);
   }
 }
 
-NSMutableDictionary *convert(const KeyValuePairs<StringLite, StringLite>* src)
+NSMutableArray *convert(const KeyValuePairs<StringLite, StringLite>* src)
 {
-  NSMutableDictionary *dest = [[NSMutableDictionary alloc] init];
+  NSMutableArray *dest = [[NSMutableArray alloc] init];
   for (size_t idx = 0, size = src->size(); idx < size; ++idx) {
     const KeyValuePair<StringLite, StringLite> *pair = src->get(idx);
-    [dest setObject:[NSString stringWithUTF8String:pair->value.str()] forKey:[NSString stringWithUTF8String:pair->key.str()]];
+    [dest addObject:[[MCKeyValuePair alloc] 
+      init:[NSString stringWithUTF8String:pair->key.str()] 
+      value:[NSString stringWithUTF8String:pair->value.str()]]];
   }
   return dest;
 }
@@ -70,7 +91,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
     case EVENT_TYPE_ERROR:
       if ([channel.delegate respondsToSelector:@selector(onError: code: message:)]) {
         ErrorEventData *event = static_cast<ErrorEventData *>(eventData);
-        [channel.delegate onError:channel code:event->code message:[NSString stringWithUTF8String:event->message.str()]];
+        [channel.delegate onError:channel code:event->code message:[NSString stringWithUTF8String:event->message]];
       }
       break;
     default:
@@ -190,7 +211,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
   client->release();
 }
 
-- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize
+- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSArray *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize
 {
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmp;
@@ -201,7 +222,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
   }
 }
 
-- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSDictionary *)headers
+- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSArray *)headers
 {
   return [self response:id code:code headers:headers payload:NULL payloadSize:0];
 }
@@ -216,13 +237,13 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
   return [self response:id code:0 headers:NULL payload:NULL payloadSize:0];
 }
 
-- (int32_t) request:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize
+- (int32_t) request:(int32_t)code headers:(NSArray *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize
 {
   int64_t discarded;
   return [self request:&discarded code:code headers:headers payload:payload payloadSize:payloadSize];
 }
 
-- (int32_t) request:(int32_t)code headers:(NSDictionary *)headers
+- (int32_t) request:(int32_t)code headers:(NSArray *)headers
 {
   return [self request:code headers:headers payload:NULL payloadSize:0];
 }
@@ -232,7 +253,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
   return [self request:code headers:NULL payload:NULL payloadSize:0];
 }
 
-- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize
+- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSArray *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize
 {
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmp;
@@ -243,7 +264,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
   }
 }
 
-- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSDictionary *)headers
+- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSArray *)headers
 {
   return [self request:id code:code headers:headers payload:NULL payloadSize:0];
 }

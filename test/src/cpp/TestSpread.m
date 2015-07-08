@@ -11,8 +11,8 @@
 - (void) onConnected:(MCRPC *)channel;
 - (void) onEstablished:(MCRPC *)channel;
 - (void) onDisconnected:(MCRPC *)channel;
-- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
-- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
+- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers;
+- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers;
 - (void) onPayload:(MCRPC *)channel id:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize;
 - (void) onError:(MCRPC *)channel code:(int32_t)code message:(NSString *)message;
 @end
@@ -45,7 +45,10 @@
 {
   [self extract:channel];
   NSLog(@"Session to server %@@%@:%hu from %@@%@:%hu is established", self.remoteId, self.remoteAddress, self.remotePort, self.localId, self.localAddress, self.localPort);
-  [channel request:2 headers:@{@"s":@"t.0:t.10:t.21:l.0", @"f":@""} payload:NULL payloadSize:0];
+  [channel request:2 headers:@[[MCKeyValuePair alloc:@"s" value:@"t.0"], [MCKeyValuePair alloc:@"s" value:@"t.1"], [MCKeyValuePair alloc:@"s" value:@"t.010"],
+         [MCKeyValuePair alloc:@"s" value:@"w.0"], [MCKeyValuePair alloc:@"s" value:@"w.1"], [MCKeyValuePair alloc:@"s" value:@"w.010@2"], [MCKeyValuePair alloc:@"s" value:@"cc"], 
+         [MCKeyValuePair alloc:@"s" value:@"c.0"], [MCKeyValuePair alloc:@"s" value:@"c.1"], [MCKeyValuePair alloc:@"s" value:@"c.010"], [MCKeyValuePair alloc:@"f" value:@""]]
+                       payload:NULL payloadSize:0];
 }
 
 - (void) onDisconnected:(MCRPC *)channel
@@ -54,7 +57,7 @@
   NSLog(@"Disconnected from server");
 }
 
-- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers
+- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers
 {
   [self extract:channel];
   NSLog(@"Request %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);
@@ -69,7 +72,7 @@
   }
 }
 
-- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers
+- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers
 {
   [self extract:channel];
   NSLog(@"Response %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);

@@ -25,13 +25,21 @@ typedef enum {
   MC_RPC_LOOP_FLAG_NONBLOCK = 2,
 } MCRPCLoopFlag;
 
+@interface MCKeyValuePair : NSObject
+@property (nonatomic, strong) NSString *key;
+@property (nonatomic, strong) NSString *value;
+- (instancetype) init:(NSString *)key value:(NSString *)value;
++ (instancetype) alloc:(NSString *)key value:(NSString *)value;
+- (NSString *) description;
+@end
+
 @protocol MCRPCEventDelegate <NSObject>
 @required
 - (void) onConnected:(MCRPC *)channel;
 - (void) onEstablished:(MCRPC *)channel;
 - (void) onDisconnected:(MCRPC *)channel;
-- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
-- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSDictionary *)headers;
+- (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers;
+- (void) onResponse:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers;
 - (void) onPayload:(MCRPC *)channel id:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize;
 - (void) onError:(MCRPC *)channel code:(int32_t)code message:(NSString *)message;
 @end
@@ -55,14 +63,14 @@ typedef enum {
 - (int32_t) loop;
 - (int32_t) breakLoop;
 - (int32_t) keepalive;
-- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize;
-- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSDictionary *)headers;
+- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSArray *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize;
+- (int32_t) response:(int64_t)id code:(int32_t)code headers:(NSArray *)headers;
 - (int32_t) response:(int64_t)id code:(int32_t)code;
 - (int32_t) response:(int64_t)id;
-- (int32_t) request:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize;
-- (int32_t) request:(int32_t)code headers:(NSDictionary *)headers;
+- (int32_t) request:(int32_t)code headers:(NSArray *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize;
+- (int32_t) request:(int32_t)code headers:(NSArray *)headers;
 - (int32_t) request:(int32_t)code;
-- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSDictionary *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize;
-- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSDictionary *)headers;
+- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSArray *)headers payload:(void *)payload payloadSize:(int32_t)payloadSize;
+- (int32_t) request:(int64_t *)id code:(int32_t)code headers:(NSArray *)headers;
 - (int32_t) request:(int64_t *)id code:(int32_t)code;
 @end

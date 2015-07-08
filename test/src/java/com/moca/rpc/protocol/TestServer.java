@@ -28,9 +28,9 @@ public class TestServer implements ChannelListener
     logger.info("Client " + channel.getRemoteAddress() + " is disconnected from local server at " + channel.getLocalAddress());
   }
 
-  public void onRequest(Channel channel, long id, int code, Map<String, String> headers, int payloadSize)
+  public void onRequest(Channel channel, long id, int code, KeyValuePair[] headers, int payloadSize)
   {
-    logger.info("Server received request : " + id + " code " + code + " " + headers + " " + payloadSize);
+    logger.info("Server received request : " + id + " code " + code + " " + Arrays.toString(headers) + " " + payloadSize);
     /*
     for (int idx = 0; idx < 10000; ++idx) {
       headers.put("id", Integer.toString(idx));
@@ -39,9 +39,9 @@ public class TestServer implements ChannelListener
     */
   }
 
-  public void onResponse(Channel channel, long id, int code, Map<String, String> headers, int payloadSize)
+  public void onResponse(Channel channel, long id, int code, KeyValuePair[] headers, int payloadSize)
   {
-    logger.info("Server received response : " + id + " code " + code + " " + headers + " " + payloadSize);
+    logger.info("Server received response : " + id + " code " + code + " " + Arrays.toString(headers) + " " + payloadSize);
   }
 
   public void onPayload(Channel channel, long id, int code, InputStream payload, boolean commit)

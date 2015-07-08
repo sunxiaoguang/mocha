@@ -203,13 +203,14 @@ enum {
   EVENT_TYPE_RESPONSE = 1 << 4,
   EVENT_TYPE_PAYLOAD = 1 << 5,
   EVENT_TYPE_ERROR = 1 << 6,
+  EVENT_TYPE_LOG = 1 << 7,
   EVENT_TYPE_ALL = 0xFFFFFFFF,
 };
 
 struct ErrorEventData
 {
   int32_t code;
-  StringLite message;
+  const char *message;
 };
 
 struct PacketEventData
@@ -230,6 +231,16 @@ struct PayloadEventData
   int32_t reserved:31;
   int32_t commit:1;
   const char *payload;
+};
+
+enum LogLevel {
+  LOG_LEVEL_TRACE = 0,
+  LOG_LEVEL_DEBUG,
+  LOG_LEVEL_INFO,
+  LOG_LEVEL_WARN,
+  LOG_LEVEL_ERROR,
+  LOG_LEVEL_FATAL,
+  LOG_LEVEL_ASSERT,
 };
 
 class RPCClient

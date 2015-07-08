@@ -34,7 +34,22 @@ public abstract class Channel
     return ChannelImpl.builder();
   }
 
-  public abstract Future response(long id, int code, Map<String, String> headers, byte[] payload, int offset, int size);
+  public abstract Future response(long id, int code, KeyValuePair[] headers, byte[] payload, int offset, int size);
+
+  public Future response(long id, int code, KeyValuePair[] headers, byte[] payload)
+  {
+    return response(id, code, headers, payload, 0, payload.length);
+  }
+  public Future response(long id, int code, KeyValuePair[] headers)
+  {
+    return response(id, code, headers, null, 0, 0);
+  }
+
+  public Future response(long id, int code, Map<String, String> headers, byte[] payload, int offset, int size)
+  {
+    return response(id, code, convert(headers), payload, 0, payload.length);
+  }
+
   public Future response(long id, int code, Map<String, String> headers, byte[] payload)
   {
     return response(id, code, headers, payload, 0, payload.length);
@@ -45,10 +60,35 @@ public abstract class Channel
   }
   public Future response(long id, int code)
   {
-    return response(id, code, null, null, 0, 0);
+    return response(id, code, (KeyValuePair[]) null, null, 0, 0);
   }
 
-  public abstract Future request(int code, Map<String, String> headers, byte[] payload, int offset, int size);
+  public abstract Future request(int code, KeyValuePair[] headers, byte[] payload, int offset, int size);
+
+  private KeyValuePair[] convert(Map<String, String> headers)
+  {
+    KeyValuePair[] pairs = new KeyValuePair[headers.size()];
+    int idx = 0;
+    for (Map.Entry<String, String> entry : headers.entrySet()) {
+      pairs[idx++] = new KeyValuePair(entry.getKey(), entry.getValue());
+    }
+    return pairs;
+  }
+
+  public Future request(int code, KeyValuePair[] headers, byte[] payload)
+  {
+    return request(code, headers, payload, 0, payload.length);
+  }
+  public Future request(int code, KeyValuePair[] headers)
+  {
+    return request(code, headers, null, 0, 0);
+  }
+
+  public Future request(int code, Map<String, String> headers, byte[] payload, int offset, int size)
+  {
+    return request(code, convert(headers), payload, offset, size);
+  }
+
   public Future request(int code, Map<String, String> headers, byte[] payload)
   {
     return request(code, headers, payload, 0, payload.length);
@@ -59,7 +99,7 @@ public abstract class Channel
   }
   public Future request(int code)
   {
-    return request(code, null, null, 0, 0);
+    return request(code, (KeyValuePair []) null, null, 0, 0);
   }
   public abstract Future shutdown();
 

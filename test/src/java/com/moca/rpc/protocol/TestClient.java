@@ -21,9 +21,7 @@ public class TestClient implements ChannelListener
   public void onEstablished(Channel channel)
   {
     logger.info("Session from client " + channel.getRemoteAddress() + "@" + channel.getRemoteId() + " is connected to local client at " + channel.getLocalAddress());
-    HashMap<String, String> header = new HashMap();
-    header.put("abc", "def");
-    channel.request(0, header);
+    channel.request(0, KeyValuePair.create("abc", "def"));
   }
 
   public void onDisconnected(Channel channel)
@@ -31,14 +29,14 @@ public class TestClient implements ChannelListener
     logger.info("Client " + channel.getRemoteAddress() + " is disconnected from local client at " + channel.getLocalAddress());
   }
 
-  public void onRequest(Channel channel, long id, int code, Map<String, String> headers, int payloadSize)
+  public void onRequest(Channel channel, long id, int code, KeyValuePair[] headers, int payloadSize)
   {
-    logger.info("Client received request : " + id + " code " + code + " " + headers + " " + payloadSize);
+    logger.info("Client received request : " + id + " code " + code + " " + Arrays.toString(headers) + " " + payloadSize);
   }
 
-  public void onResponse(Channel channel, long id, int code, Map<String, String> headers, int payloadSize)
+  public void onResponse(Channel channel, long id, int code, KeyValuePair[] headers, int payloadSize)
   {
-    logger.info("Client received response : " + id + " code " + code + " " + headers + " " + payloadSize);
+    logger.info("Client received response : " + id + " code " + code + " " + Arrays.toString(headers) + " " + payloadSize);
   }
 
   public void onPayload(Channel channel, long id, int code, InputStream payload, boolean commit)

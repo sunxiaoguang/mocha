@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <new>
+#include <stdint.h>
 
 #define MOCA_RPC_NAMESPACE ::moca::rpc
 

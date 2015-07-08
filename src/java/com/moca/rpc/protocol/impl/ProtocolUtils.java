@@ -6,6 +6,8 @@ import java.nio.charset.*;
 
 import io.netty.buffer.*;
 
+import com.moca.rpc.protocol.*;
+
 public final class ProtocolUtils
 {
   private static Charset UTF8_CHARSET;
@@ -28,7 +30,7 @@ public final class ProtocolUtils
     return buffer;
   }
 
-  static Map<String, String> EMPTY_STRING_STRING_MAP = Collections.unmodifiableMap(new LinkedHashMap(0));
+  static KeyValuePair[] EMPTY_KEY_VALUE_PAIR = new KeyValuePair[0];
   static final ByteOrder NATIVE_ORDER = ByteOrder.nativeOrder();
 
   static byte[] copy(byte[] input, int offset, int length)
@@ -83,34 +85,34 @@ public final class ProtocolUtils
     return buffer;
   }
 
-  static Map<String, String> deserialize(ByteBuf buffer, ByteOrder order)
+  static KeyValuePair[] deserialize(ByteBuf buffer, ByteOrder order)
   {
     if (buffer == null || buffer.readableBytes() == 0) {
-      return EMPTY_STRING_STRING_MAP;
+      return EMPTY_KEY_VALUE_PAIR;
     }
     buffer = buffer.order(order);
-    HashMap<String, String> result = new HashMap();
+    ArrayList<KeyValuePair> result = new ArrayList();
     try {
       buffer.markReaderIndex();
       while (buffer.readableBytes() > 0) {
         String key = deserializeString(buffer);
         String value = deserializeString(buffer);
-        result.put(key, value);
+        result.add(new KeyValuePair(key, value));
       }
     } finally {
       buffer.resetReaderIndex();
     }
-    return result;
+    return result.toArray(new KeyValuePair[result.size()]);
   }
 
-  static ByteBuf serialize(Map<String, String> response, ByteOrder order)
+  static ByteBuf serialize(KeyValuePair[] headers, ByteOrder order)
   {
     ArrayList<ByteBuf> buffers = new ArrayList();
     ByteBuf buffer = null;
 
-    for (Map.Entry<String, String> entry : response.entrySet()) {
-      buffer = serializeString(entry.getKey(), buffers, buffer, order);
-      buffer = serializeString(entry.getValue(), buffers, buffer, order);
+    for (KeyValuePair pair : headers) {
+      buffer = serializeString(pair.key(), buffers, buffer, order);
+      buffer = serializeString(pair.value(), buffers, buffer, order);
     }
     if (buffers.isEmpty()) {
       return null;

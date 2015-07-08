@@ -5,6 +5,7 @@ import static com.moca.core.exception.Suppressor.*;
 
 import java.net.*;
 import java.util.*;
+import java.util.zip.*;
 import java.util.concurrent.atomic.*;
 import java.util.concurrent.*;
 import java.nio.*;
@@ -20,13 +21,19 @@ import io.netty.handler.ssl.util.*;
 
 public class ChannelImpl extends com.moca.rpc.protocol.Channel
 {
-  private static Logger logger = LoggerFactory.getLogger(ChannelImpl.class);
-  protected static int MAX_CHANNEL_ID_LENGTH = 128;
-  private static int MAX_PENDING_EVENTS = 128;
+  private final static Logger logger = LoggerFactory.getLogger(ChannelImpl.class);
+  protected final static int MAX_CHANNEL_ID_LENGTH = 128;
+  private final static int MAX_PENDING_EVENTS = 128;
+  private final static int COMPRESS_SIZE_THRESHOLD = 512;
 
   private static EventLoopGroupFactory listenLoopGroupFactory = new EventLoopGroupFactory(NioEventLoopGroup.class);
   private static EventLoopGroupFactory socketLoopGroupFactory = listenLoopGroupFactory;
-  private AtomicLong lastKeepaliveTime = new AtomicLong(0);
+  private final AtomicLong lastKeepaliveTime = new AtomicLong(0);
+
+  private int flags;
+  private int version;
+
+  private boolean acceptZlib = false;
 
   static synchronized EventLoopGroup createListenEventLoopGroup()
   {
@@ -293,16 +300,53 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     return writeAndFlush(fixedBuffer);
   }
 
-  public Future doSend(long id, int code, int type, Map<String, String> headers, byte[] payload, int offset, int size)
+  private int compressBound(int inputSize)
+  {
+    return inputSize + (inputSize >> 12) + (inputSize >> 14) + 11;
+  }
+
+  private ByteBuf compress(ByteBuf input, int inputSize)
+  {
+    ByteBuf output = Unpooled.buffer(compressBound(inputSize) + 4).order(order);
+    output.writeInt(inputSize);
+    try {
+      try (ByteBufOutputStream bos = new ByteBufOutputStream(output);
+          DeflaterOutputStream dos = new DeflaterOutputStream(bos)) {
+        input.readBytes(dos, inputSize);
+      }
+      int compressedSize = output.readableBytes();
+      /* TODO make these configurable */
+      if (compressedSize < inputSize * 0.90 || inputSize - compressedSize > 128) {
+        logger.info("Compressed size " + compressedSize + " is sufficiently less than original input size " + inputSize + ", use compressed version");
+        return output;
+      } else {
+        logger.info("Compressed size " + compressedSize + " is not saving significant amount of data compared to original input size " + inputSize + ", use plain version");
+        return input;
+      }
+    } catch (IOException ex) {
+      throw new RuntimeException(ex);
+    }
+  }
+
+  public Future doSend(long id, int code, int type, KeyValuePair[] headers, byte[] payload, int offset, int size)
   {
     if (remoteId == null) {
       throw new IllegalStateException("Session has not been established yet");
     }
     int headersSize;
     ByteBuf serializedHeaders;
-    if (headers != null && !headers.isEmpty()) {
+    int flags = 0;
+    if (headers != null && headers.length > 0) {
       serializedHeaders = ProtocolUtils.serialize(headers, localOrder);
       headersSize = serializedHeaders.readableBytes();
+      if (acceptZlib && headersSize > COMPRESS_SIZE_THRESHOLD) {
+        ByteBuf compressed = compress(serializedHeaders, headersSize);
+        if (serializedHeaders != compressed) {
+          serializedHeaders = compressed;
+          headersSize = compressed.readableBytes();
+          flags = RPCHandler.PACKET_FLAG_HEADER_ZLIB_ENCODED;
+        }
+      }
     } else {
       serializedHeaders = null;
       headersSize = 0;
@@ -322,7 +366,7 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     // code
     fixedBuffer.writeInt(code);
     // flag
-    fixedBuffer.writeInt(type);
+    fixedBuffer.writeInt(type | (flags << 8));
     // header size
     fixedBuffer.writeInt(headersSize);
     // payload size
@@ -337,12 +381,12 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     return writeAndFlush(buffer);
   }
 
-  public Future response(long id, int code, Map<String, String> headers, byte[] payload, int offset, int size)
+  public Future response(long id, int code, KeyValuePair[] headers, byte[] payload, int offset, int size)
   {
     return doSend(id, code, RPCHandler.PACKET_TYPE_RESPONSE, headers, payload, offset, size);
   }
 
-  public Future request(int code, Map<String, String> headers, byte[] payload, int offset, int size)
+  public Future request(int code, KeyValuePair[] headers, byte[] payload, int offset, int size)
   {
     return doSend(currentId.getAndIncrement(), code, RPCHandler.PACKET_TYPE_REQUEST, headers, payload, offset, size);
   }
@@ -383,6 +427,17 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     synchronized (this) {
       notifyAll();
     }
+  }
+
+  protected void flags(int flags)
+  {
+    this.flags = flags;
+    this.acceptZlib = (flags & RPCHandler.NEGOTIATION_FLAG_ACCEPT_ZLIB) == RPCHandler.NEGOTIATION_FLAG_ACCEPT_ZLIB;
+  }
+
+  protected void version(int version)
+  {
+    this.version = version;
   }
 
   public ByteOrder remoteOrder()
