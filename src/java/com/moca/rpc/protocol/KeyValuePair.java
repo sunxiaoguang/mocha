@@ -1,5 +1,7 @@
 package com.moca.rpc.protocol;
 
+import java.util.*;
+
 public final class KeyValuePair
 {
   private String key;
@@ -29,6 +31,40 @@ public final class KeyValuePair
   public String value()
   {
     return value;
+  }
+
+  public static Map<String, String> toMap(KeyValuePair[] pairs, boolean ignoreDuplicate)
+  {
+    HashMap<String, String> result = new HashMap(pairs.length);
+    if (ignoreDuplicate) {
+      for (KeyValuePair pair : pairs) {
+        result.put(pair.key(), pair.value());
+      }
+    } else {
+      for (KeyValuePair pair : pairs) {
+        String key = pair.key();
+        if (result.containsKey(key)) {
+          throw new RuntimeException("Key '" + key + "' has multiple entries");
+        }
+        result.put(key, pair.value());
+      }
+    }
+    return result;
+  }
+
+  public static Map<String, String> toMap(KeyValuePair[] pairs)
+  {
+    return toMap(pairs, false);
+  }
+
+  public static KeyValuePair[] create(Map<String, String> items)
+  {
+    KeyValuePair[] pairs = new KeyValuePair[items.size()];
+    int idx = 0;
+    for (Map.Entry<String, String> entry : items.entrySet()) {
+      pairs[idx++] = new KeyValuePair(entry.getKey(), entry.getValue());
+    }
+    return pairs;
   }
 
   public static KeyValuePair[] create(String ... items)

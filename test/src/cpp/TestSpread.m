@@ -66,7 +66,7 @@
   NSLog(@"%d bytes payload", payloadSize);
   [channel response:id code:(code - 100) headers:headers payload:NULL payloadSize:0];
   if (code == 4) {
-    NSLog(@"Broadcast");
+    NSLog(@"Session Push");
   } else {
     NSLog(@"Publish");
   }

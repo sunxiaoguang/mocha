@@ -32,6 +32,8 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
 
   private int flags;
   private int version;
+  private InetSocketAddress localAddress;
+  private InetSocketAddress remoteAddress;
 
   private boolean acceptZlib = false;
 
@@ -214,7 +216,7 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
   private volatile ByteOrder order;
   private ByteOrder localOrder = ByteOrder.nativeOrder();
   private String localId;
-  private volatile String remoteId;
+  private volatile String remoteId = "NOT_AVAILABLE";
   private Thread dispatcher;
   private BlockingQueue pendingEvents;
   private volatile boolean running;
@@ -255,23 +257,14 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
   @Override
   public String getRemoteId()
   {
-    if (remoteId == null) {
-      synchronized (this) {
-        while (remoteId == null) {
-          try {
-            wait();
-          } catch (InterruptedException ex) {
-            throw new RuntimeException(ex);
-          }
-        }
-      }
-    }
     return remoteId;
   }
 
   protected void init(io.netty.channel.Channel channel)
   {
     this.channel = channel;
+    this.localAddress = (InetSocketAddress) channel.localAddress();
+    this.remoteAddress = (InetSocketAddress) channel.remoteAddress();
   }
 
   protected Future writeAndFlush(ByteBuf buf)
@@ -353,7 +346,7 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
     }
     ByteBuf payloadBuffer;
     if (size > 0) {
-      if (payload.length <= offset + size) {
+      if (payload.length < offset + size) {
         throw new ArrayIndexOutOfBoundsException(offset + size);
       }
       payloadBuffer = Unpooled.wrappedBuffer(payload, offset, size);
@@ -405,12 +398,12 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
 
   public InetSocketAddress getLocalAddress()
   {
-    return (InetSocketAddress) channel.localAddress();
+    return localAddress;
   }
 
   public InetSocketAddress getRemoteAddress()
   {
-    return (InetSocketAddress) channel.remoteAddress();
+    return remoteAddress;
   }
 
   protected void remoteOrder(ByteOrder order)

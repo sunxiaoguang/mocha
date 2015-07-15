@@ -284,7 +284,7 @@ void dispatchErrorEvent(JNIEnv *env, RPCOpaqueData eventData, jobject rpc)
   jstring message = NULL;
 
   convert(env, event->message, &message);
-  env->CallObjectMethod(rpc, rpcDispatchErrorMethod, event->code, message);
+  env->CallVoidMethod(rpc, rpcDispatchErrorMethod, event->code, message);
 
   if (message) {
     env->DeleteLocalRef(message);
@@ -312,7 +312,7 @@ void dispatchPacketEvent(JNIEnv *env, int32_t eventType, RPCOpaqueData eventData
       code = RPC_INVALID_ARGUMENT;
       goto error;
   }
-  env->CallObjectMethod(rpc, method, event->id, event->code, headers, event->payloadSize);
+  env->CallVoidMethod(rpc, method, event->id, event->code, headers, event->payloadSize);
   goto cleanupExit;
 
 error:
@@ -335,7 +335,7 @@ void dispatchPayloadEvent(JNIEnv *env, RPCOpaqueData eventData, jobject rpc)
   ErrorEventData error;
 
   MOCA_RPC_DO_GOTO(code, convert(env, event->payload, event->size, &array), error)
-  env->CallObjectMethod(rpc, rpcDispatchPayloadMethod, event->id, array, static_cast<jboolean>(event->commit));
+  env->CallVoidMethod(rpc, rpcDispatchPayloadMethod, event->id, array, static_cast<jboolean>(event->commit));
   goto cleanupExit;
 
 error:
@@ -357,13 +357,13 @@ void jniEventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData
   JNIEnv *env = ctx->env;
   switch (eventType) {
     case EVENT_TYPE_CONNECTED:
-      env->CallObjectMethod(rpc, rpcDispatchConnectedMethod);
+      env->CallVoidMethod(rpc, rpcDispatchConnectedMethod);
       break;
     case EVENT_TYPE_ESTABLISHED:
-      env->CallObjectMethod(rpc, rpcDispatchEstablishedMethod);
+      env->CallVoidMethod(rpc, rpcDispatchEstablishedMethod);
       break;
     case EVENT_TYPE_DISCONNECTED:
-      env->CallObjectMethod(rpc, rpcDispatchDisconnectedMethod);
+      env->CallVoidMethod(rpc, rpcDispatchDisconnectedMethod);
       break;
     case EVENT_TYPE_REQUEST:
     case EVENT_TYPE_RESPONSE:

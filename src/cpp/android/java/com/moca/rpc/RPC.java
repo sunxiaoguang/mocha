@@ -130,6 +130,8 @@ public class RPC
       int pos = address.indexOf(":");
       if (pos >= 0) {
         address = address.substring(0, pos);
+      } else {
+        throw new IllegalArgumentException("Invalid server address '" + address +  "', port number is not specified");
       }
       InetAddress tmp = InetAddress.getByName(address);
       this.address = fullAddress;

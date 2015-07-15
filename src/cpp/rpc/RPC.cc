@@ -1724,7 +1724,7 @@ RPCClientImpl::loop(int32_t flags)
         gettimeofday(&now, NULL);
         if ((now.tv_sec - start.tv_sec) * 1000000L + (now.tv_usec - start.tv_usec) > timeout_) {
           st = RPC_TIMEOUT;
-        } else {
+        } else if (getState() > STATE_NEGOTIATION_PEER_ID) {
           st = keepalive();
         }
       }
