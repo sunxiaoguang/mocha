@@ -1189,6 +1189,7 @@ RPCClientImpl::doReadPacketPayloadSize()
       return processErrorHook(RPC_INCOMPATIBLE_PROTOCOL);
     }
     if (requestHeaderSize_ == 0) {
+      st = firePacketEvent();
       if (requestPayloadSize_ == 0) {
         setState(STATE_START_OVER);
       } else {
