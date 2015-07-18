@@ -599,7 +599,7 @@ RPCClientImpl::doWriteFully(int fd, iovec *iov, size_t *iovsize) const
   while (left > 0) {
     wrote = writev(fd, iov, left);
     if (wrote == -1) {
-      if (errno == EAGAIN || errno == EINTR) {
+      if (errno == EINTR) {
         continue;
       } else {
         st = convertError();
@@ -1385,7 +1385,11 @@ RPCClientImpl::fillBuffer()
     } else if (rd == 0) {
       return processErrorHook(RPC_DISCONNECTED);
     } else {
-      return convertError();
+      if (errno == EINTR) {
+        continue;
+      } else {
+        return convertError();
+      }
     }
   }
 
