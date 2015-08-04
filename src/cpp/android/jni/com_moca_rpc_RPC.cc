@@ -53,6 +53,7 @@ static bool checkException(JNIEnv *env)
     if (debugMode) {
       env->ExceptionDescribe();
     }
+    env->ExceptionClear();
     return true;
   } else {
     return false;
@@ -289,6 +290,7 @@ void dispatchErrorEvent(JNIEnv *env, RPCOpaqueData eventData, jobject rpc)
   if (message) {
     env->DeleteLocalRef(message);
   }
+
   return;
 }
 
@@ -377,6 +379,7 @@ void jniEventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData
     default:
       break;
   }
+  checkException(env);
 }
 
 typedef int32_t (RPCClient::*RPCGetAddress)(StringLite *address, uint16_t *port) const;
