@@ -32,6 +32,16 @@ public abstract class Server implements Lifecycle
   private static Logger logger = LoggerFactory.getLogger(Server.class);
   private ServerConfig config;
 
+  protected Channel getServerChannel()
+  {
+    return channel;
+  }
+
+  protected Channel getManagementChannel()
+  {
+    return managementChannel;
+  }
+
   private Channel channel;
   private Channel managementChannel;
   private volatile boolean running = true;
@@ -216,8 +226,6 @@ public abstract class Server implements Lifecycle
       logger.info("Current payload limit " + payloadLimit + " is too small, change it to 4096");
       this.payloadLimit = 4096;
     }
-    initChannel();
-    initEvictThread();
   }
 
   private void initEvictThread()
@@ -356,6 +364,8 @@ public abstract class Server implements Lifecycle
 
   public void start()
   {
+    initChannel();
+    initEvictThread();
     logger.info(getClass().getSimpleName() + " server is start and listening on " + config.address());
     logger.info(getClass().getSimpleName() + " management extension is start and listening on " + config.managementAddress());
   }
@@ -363,11 +373,12 @@ public abstract class Server implements Lifecycle
   public void stop()
   {
     safeRun(evictThread, t -> {running = false; t.interrupt(); t.join();});
+    shutdownChannel();
+    logger.info(getClass().getSimpleName() + " is fully stopped");
   }
 
   public void destroy()
   {
-    shutdownChannel();
-    logger.info(getClass().getSimpleName() + " is fully stopped");
+    logger.info(getClass().getSimpleName() + " is destroyed");
   }
 }
