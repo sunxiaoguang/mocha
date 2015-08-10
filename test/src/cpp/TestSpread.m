@@ -1,4 +1,6 @@
 #import "MCRPC.h"
+#import <pthread.h>
+#import <unistd.h>
 
 @interface EventDelegate : NSObject<MCRPCEventDelegate>
 @property (nonatomic, strong) NSString *remoteAddress;
@@ -60,6 +62,7 @@
 - (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers
 {
   [self extract:channel];
+  sleep(1);
   NSLog(@"Request %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);
   NSLog(@"Code: %d", code);
   NSLog(@"Headers: %@", headers);
@@ -96,25 +99,40 @@
 
 @end
 
+void *thread(void *arg)
+{
+  EventDelegate *delegate = [[EventDelegate alloc] init];
+  MCRPC *channel = [[MCRPC alloc] init:delegate];
+  if (!channel) {
+    NSLog(@"Could not create");
+    return NULL;
+  }
+  if ([channel connect:[NSString stringWithUTF8String:(const char *) arg]] != 0) {
+    NSLog(@"Could not connect");
+    return NULL;
+  }
+  int32_t st;
+  do {
+    st = [channel loop];
+  } while (st == MC_RPC_OK);
+  return NULL;
+}
+
 int main(int argc, const char **argv)
 {
   if (argc < 2) {
     NSLog(@"Missing required argument");
     return 1;
   }
-  EventDelegate *delegate = [[EventDelegate alloc] init];
-  MCRPC *channel = [[MCRPC alloc] init:delegate];
-  if (!channel) {
-    NSLog(@"Could not create");
-    return 1;
+  int numThreads = 128;
+  pthread_t threads[numThreads]; 
+  for (int idx = 0; idx < numThreads; ++idx) {
+    pthread_create(threads + idx, NULL, thread, (void *) argv[1]);
   }
-  if ([channel connect:[NSString stringWithUTF8String:argv[1]]] != 0) {
-    NSLog(@"Could not connect");
-    return 1;
+
+  for (int idx = 0; idx < numThreads; ++idx) {
+    void *tmp;
+    pthread_join(threads[idx], &tmp);
   }
-  int32_t st;
-  do {
-    st = [channel loop];
-  } while (st == MC_RPC_OK);
   return 0;
 }

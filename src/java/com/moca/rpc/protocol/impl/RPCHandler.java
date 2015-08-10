@@ -398,6 +398,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     void readPayload(ByteBuf buffer)
     {
       int available = buffer.readableBytes();
+      ByteBuf oldBuffer = buffer;
       if (available > remaining) {
         buffer = buffer.readBytes(remaining);
         remaining = 0;
@@ -408,6 +409,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
       try {
         dispatchPayload(packetId, code, buffer, commit);
       } finally {
+        if (buffer != oldBuffer) {
+          buffer.release();
+        }
         if (commit) {
           reset(STATE_READ_DONE);
         }
@@ -449,7 +453,13 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   @Override
   public void channelInactive(ChannelHandlerContext ctx) throws Exception
   {
-    listener.onDisconnected(channel);
+    try {
+      listener.onDisconnected(channel);
+    } finally {
+      if (queued != null) {
+        queued.release();
+      }
+    }
   }
 
   @Override
@@ -489,6 +499,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     return buffer;
   }
 
+  /*
   @Override
   public void channelRead(ChannelHandlerContext ctx, Object msg)
       throws Exception
@@ -550,11 +561,50 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
         if (oldQueued != null && oldQueued != queued) {
           oldQueued.release();
         }
+        if (releaseBuffer) {
+          buffer.release();
+        }
+        input.release();
       }
-      if (releaseBuffer) {
-        buffer.release();
+    }
+  }
+  */
+
+  @Override
+  public void channelRead(ChannelHandlerContext ctx, Object msg)
+      throws Exception
+  {
+    /* TODO double check if there was leak in composite buffer version */
+    ByteBuf input = (ByteBuf) msg;
+    ByteBuf buffer = null;
+    try {
+      if (queued != null) {
+        buffer = Unpooled.copiedBuffer(queued, input);
+        queued.release();
+        queued = null;
+      } else {
+        buffer = input;
       }
-      input.release();
+
+      while (buffer.readableBytes() >= getMinReadableBytes()) {
+        read(buffer);
+      }
+    } finally {
+      try {
+        if (buffer != null) {
+          if (buffer.readableBytes() > 0) {
+            queued = buffer;
+            buffer = null;
+          } else {
+            queued = null;
+          }
+        }
+      } finally {
+        if (buffer != null && buffer != input) {
+          buffer.release();
+        }
+        input.release();
+      }
     }
   }
 

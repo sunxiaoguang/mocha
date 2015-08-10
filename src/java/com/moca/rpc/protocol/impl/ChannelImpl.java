@@ -314,6 +314,7 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
         return output;
       } else {
         logger.info("Compressed size " + compressedSize + " is not saving significant amount of data compared to original input size " + inputSize + ", use plain version");
+        output.release();
         return input;
       }
     } catch (IOException ex) {
@@ -335,6 +336,7 @@ public class ChannelImpl extends com.moca.rpc.protocol.Channel
       if (acceptZlib && headersSize > COMPRESS_SIZE_THRESHOLD) {
         ByteBuf compressed = compress(serializedHeaders, headersSize);
         if (serializedHeaders != compressed) {
+          serializedHeaders.release();
           serializedHeaders = compressed;
           headersSize = compressed.readableBytes();
           flags = RPCHandler.PACKET_FLAG_HEADER_ZLIB_ENCODED;

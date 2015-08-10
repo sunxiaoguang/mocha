@@ -8,6 +8,7 @@ public class TestJNIRPC
   private static volatile boolean running = true;
   public static void main(String[] args) throws Exception
   {
+    /*
     RPC rpc = RPC.builder().connect(args[0]).listener(new RPCEventListener() {
       public void onRequest(RPC channel, long id, int code, KeyValuePair[] headers, int payloadSize)
       {
@@ -80,5 +81,6 @@ public class TestJNIRPC
     System.out.println("Returned from RPC Event Loop, close it");
     rpc.close();
     System.out.println("RPC is closed and may not be used anymore");
+    */
   }
 }

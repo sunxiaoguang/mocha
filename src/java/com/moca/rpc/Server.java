@@ -193,7 +193,8 @@ public abstract class Server implements Lifecycle
 
   private void initChannel()
   {
-    channel = Channel.builder().bind(config.address()).listener(new ServerListener()).build();
+    channel = Channel.builder().bind(config.address()).listener(new ServerListener())
+      .timeout(config.idleTimeout(), TimeUnit.SECONDS).limit(config.headerLimit()).build();
     managementChannel = Channel.builder().bind(config.managementAddress()).listener(new ManagementListener()).build();
   }
 
