@@ -456,9 +456,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     try {
       listener.onDisconnected(channel);
     } finally {
-      if (queued != null) {
-        queued.release();
-      }
+      safeRun(queued, buffer -> buffer.release());
     }
   }
 
