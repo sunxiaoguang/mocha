@@ -577,8 +577,7 @@ int32_t RPCClientImpl::convertError() const
       st = RPC_DISCONNECTED;
       break;
     case EWOULDBLOCK:
-      st = RPC_WOULDBLOCK;
-      break;
+      return RPC_WOULDBLOCK;
     case ETIMEDOUT:
       st = RPC_TIMEOUT;
       break;
