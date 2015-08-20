@@ -32,6 +32,7 @@ static jmethodID rpcDispatchConnectedMethod = NULL;
 static jmethodID rpcDispatchEstablishedMethod = NULL;
 static jmethodID rpcDispatchDisconnectedMethod = NULL;
 static jmethodID rpcDispatchErrorMethod = NULL;
+static jmethodID rpcToStringMethod = NULL;
 static jfieldID rpcHandleField = NULL;
 static jfieldID rpcGlobalRefField = NULL;
 
@@ -98,7 +99,14 @@ static int32_t convert(JNIEnv *env, const char *src, jstring *str)
   if (checkException(env)) {
     return RPC_JAVA_EXCEPTION;
   }
-  *str = env->NewStringUTF(src);
+  jbyteArray bytes = NULL;
+  int32_t code = convert(env, src, strlen(src), &bytes);
+  if (MOCA_RPC_FAILED(code)){
+    return code;
+  }
+
+  *str = static_cast<jstring>(env->CallStaticObjectMethod(rpcClass, rpcToStringMethod, bytes));
+  env->DeleteLocalRef(bytes);
   return checkExceptionCode(env);
 }
 
@@ -203,6 +211,13 @@ getMethodID(JNIEnv *env, jclass clz, const char *name, const char *type, jmethod
 }
 
 static int32_t
+getStaticMethodID(JNIEnv *env, jclass clz, const char *name, const char *type, jmethodID *method)
+{
+  *method = env->GetStaticMethodID(clz, name, type);
+  return checkExceptionCode(env);
+}
+
+static int32_t
 getFieldID(JNIEnv *env, jclass clz, const char *name, const char *type, jfieldID *field)
 {
   *field = env->GetFieldID(clz, name, type);
@@ -250,6 +265,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved)
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchEstablishedEvent", "()V", &rpcDispatchEstablishedMethod), error)
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchDisconnectedEvent", "()V", &rpcDispatchDisconnectedMethod), error)
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchErrorEvent", "(ILjava/lang/String;)V", &rpcDispatchErrorMethod), error)
+  MOCA_RPC_DO_GOTO(code, getStaticMethodID(env, rpcClass, "toString", "([B)Ljava/lang/String;", &rpcToStringMethod), error)
   MOCA_RPC_DO_GOTO(code, getFieldID(env, rpcClass, "handle", "J", &rpcHandleField), error)
   MOCA_RPC_DO_GOTO(code, getFieldID(env, rpcClass, "globalRef", "J", &rpcGlobalRefField), error)
 
@@ -389,24 +405,26 @@ jstring doGetAddress(JNIEnv *env, jlong handle, RPCGetAddress get)
 {
   StringLite str;
   int32_t code = (getClient(handle)->*get)(&str, NULL);
+  jstring result = NULL;
   if (MOCA_RPC_FAILED(code)) {
     runtimeException(env, code);
-    return NULL;
   } else {
-    return env->NewStringUTF(str.str());
+    convert(env, str.str(), &result);
   }
+  return result;
 }
 
 jstring doGetId(JNIEnv *env, jlong handle, RPCGetId get)
 {
   StringLite str;
   int32_t code = (getClient(handle)->*get)(&str);
+  jstring result = NULL;
   if (MOCA_RPC_FAILED(code)) {
     runtimeException(env, code);
-    return NULL;
   } else {
-    return env->NewStringUTF(str.str());
+    convert(env, str.str(), &result);
   }
+  return result;
 }
 
 jint doGetPort(JNIEnv *env, jlong handle, RPCGetAddress get)

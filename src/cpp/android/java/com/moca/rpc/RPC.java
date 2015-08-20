@@ -44,6 +44,15 @@ public class RPC
   private native static void doResponse(long handle, long id, int code, KeyValuePair[] headers, byte[] payload, int offset, int size);
   private native static void doRequest(long handle, int code, KeyValuePair[] headers, byte[] payload, int offset, int size);
 
+  private static String toString(byte[] utf8)
+  {
+    try {
+      return new String(utf8, "UTF-8");
+    } catch (UnsupportedEncodingException ex) {
+      throw new RuntimeException(ex);
+    }
+  }
+
   private void dispatchRequestEvent(long id, int code, KeyValuePair[] headers, int payloadSize)
   {
     listener.onRequest(this, id, code, headers, payloadSize);

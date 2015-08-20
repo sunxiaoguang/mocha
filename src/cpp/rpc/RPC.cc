@@ -308,7 +308,7 @@ private:
   mutable pthread_mutex_t mutex_;
   pthread_t dispatcherThreadId_;
   KeyValuePairs<int32_t, EventListenerHandle> listeners_;
-  int32_t pipe_[2];
+  mutable int32_t pipe_[2];
   pollfd fdset_[2];
   bool running_;
   mutable pthread_mutex_t stateMutex_;
@@ -491,7 +491,7 @@ private:
   int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize) const;
   int32_t writeFully(int fd, iovec *iov, size_t *iovsize) const;
 
-  static void checkAndClose(int32_t fd);
+  static void checkAndClose(int32_t *fd);
 
 public:
   RPCClientImpl();
@@ -822,19 +822,20 @@ RPCClientImpl::fireErrorEvent(int32_t status, const char *message) const
 }
 
 void
-RPCClientImpl::checkAndClose(int32_t fd)
+RPCClientImpl::checkAndClose(int32_t *fd)
 {
-  if (fd > 0) {
-    ::close(fd);
+  if (*fd > 0) {
+    ::close(*fd);
+    *fd = -1;
   }
 }
 
 void
 RPCClientImpl::close() const
 {
-  checkAndClose(fd_);
-  checkAndClose(pipe_[0]);
-  checkAndClose(pipe_[1]);
+  checkAndClose(&fd_);
+  checkAndClose(pipe_ + 0);
+  checkAndClose(pipe_ + 1);
 }
 
 int32_t
