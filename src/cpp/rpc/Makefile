@@ -3,7 +3,7 @@ BUILD_DIR ?= $(PROJECT_HOME)/build/make
 
 include $(BUILD_DIR)/make.defs
 
-CPPSRCS += RPC.cc
+CPPSRCS += RPCClient.cc RPC.cc
 OBJS += $(addprefix $(OUTDIR)/,$(CPPSRCS:.cc=$(OBJ_SUFFIX)))
 
 LIB_NAME = MocaRPC

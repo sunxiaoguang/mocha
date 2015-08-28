@@ -1,8 +1,11 @@
 #include "com_moca_rpc_RPC.h"
-#include "RPC.h"
+#include "RPCClient.h"
 #include <pthread.h>
+#include <android/log.h>
+#include <stdio.h>
 
 #define RPC_JAVA_EXCEPTION (-1024)
+#define MAX_LOG_LINE_SIZE (4096)
 namespace moca { namespace rpc {
 JNIEnv *jniEnv;
 }}
@@ -38,6 +41,55 @@ static jfieldID rpcGlobalRefField = NULL;
 
 static bool debugMode = false;
 
+#define LOG_TRACE(...) androidLogger(LOG_LEVEL_TRACE, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_DEBUG(...) androidLogger(LOG_LEVEL_DEBUG, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_INFO(...) androidLogger(LOG_LEVEL_INFO, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_WARN(...) androidLogger(LOG_LEVEL_WARN, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_ERROR(...) androidLogger(LOG_LEVEL_ERROR, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_FATAL(...) androidLogger(LOG_LEVEL_FATAL, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_ASSERT(...) androidLogger(LOG_LEVEL_ASSERT, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+
+void androidLogger(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+{
+  va_list args;
+  char *buffer = static_cast<char *>(malloc(MAX_LOG_LINE_SIZE));
+  char *p = buffer;
+  int32_t bufferSize = static_cast<int32_t>(sizeof(buffer));
+  int32_t size;
+
+  size = snprintf(p, bufferSize, "[%s|%s:%u] ", func, file, line);
+  p += size;
+  bufferSize -= size;
+
+  if (bufferSize > 0) {
+    va_start(args, fmt);
+    size = vsnprintf(p, bufferSize, fmt, args);
+    va_end(args);
+
+    p += size;
+    bufferSize -= size;
+  }
+
+  if (size <= 1) {
+    *p = '\0';
+  }
+
+  if (level == LOG_LEVEL_ASSERT) {
+    __android_log_assert("", tag, "%s", buffer);
+  } else {
+    __android_log_print((android_LogPriority) (level + (ANDROID_LOG_VERBOSE - LOG_LEVEL_TRACE)), tag, "%s", buffer);
+  }
+  free(buffer);
+}
+
+void androidLogger(LogLevel level, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  androidLogger(level, "RPC", func, file, line, fmt, args);
+  va_end(args);
+}
+
 const char *jniErrorString(int32_t code)
 {
   if (code == RPC_JAVA_EXCEPTION) {
@@ -55,6 +107,7 @@ static bool checkException(JNIEnv *env)
       env->ExceptionDescribe();
     }
     env->ExceptionClear();
+    LOG_ERROR("Caught java exception");
     return true;
   } else {
     return false;
@@ -74,6 +127,7 @@ static int32_t convert(JNIEnv *env, const char *src, size_t size, jbyteArray *re
 {
   jbyteArray array = env->NewByteArray(static_cast<jsize>(size));
   if (array == NULL) {
+    LOG_ERROR("Running out of memory when allocating %zd bytes bytes array", size);
     return RPC_OUT_OF_MEMORY;
   }
   env->SetByteArrayRegion(array, 0, static_cast<jsize>(size), reinterpret_cast<const jbyte *>(src));
@@ -102,6 +156,7 @@ static int32_t convert(JNIEnv *env, const char *src, jstring *str)
   jbyteArray bytes = NULL;
   int32_t code = convert(env, src, strlen(src), &bytes);
   if (MOCA_RPC_FAILED(code)){
+    LOG_ERROR("Can not convert '%s' to Java string", str);
     return code;
   }
 
@@ -160,14 +215,17 @@ static int32_t convert(JNIEnv *env, jobjectArray headers, KeyValuePairs<StringLi
   for (jsize idx = 0, size = env->GetArrayLength(headers); idx < size; ++idx) {
     jobject pair = env->GetObjectArrayElement(headers, idx);
     if (!pair) {
+      LOG_ERROR("Could not get key value pair out of array");
       return RPC_INVALID_ARGUMENT;
     }
     jobject key = env->CallObjectMethod(pair, keyValuePairGetKeyMethod);
     if (!key) {
+      LOG_ERROR("Could not get key out of key value pair");
       return RPC_INVALID_ARGUMENT;
     }
     jobject value = env->CallObjectMethod(pair, keyValuePairGetValueMethod);
     if (!value) {
+      LOG_ERROR("Could not get value out of key value pair");
       return RPC_INVALID_ARGUMENT;
     }
     MOCA_RPC_DO(convert(env, static_cast<jstring>(key), &k));
@@ -250,23 +308,40 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved)
   }
   env = static_cast<JNIEnv *>(tmp);
 
+  LOG_TRACE("Loading java/lang/RuntimeException");
   MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/RuntimeException", &runtimeExceptionClass), error)
+  LOG_TRACE("Loading java/lang/String");
   MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/String", &stringClass), error)
+  LOG_TRACE("Loading com/moca/rpc/KeyValuePair");
   MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/KeyValuePair", &keyValuePairClass), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC");
   MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/RPC", &rpcClass), error)
 
+  LOG_TRACE("Loading com/moca/rpc/KeyValuePair <init> (Ljava/lang/String;Ljava/lang/String;)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V", &keyValuePairConstructorMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/KeyValuePair getKey ()Ljava/lang/String;");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getKey", "()Ljava/lang/String;", &keyValuePairGetKeyMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/KeyValuePair getValue ()Ljava/lang/String;");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getValue", "()Ljava/lang/String;", &keyValuePairGetValueMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchRequestEvent (JI[Lcom/moca/rpc/KeyValuePair;I)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchRequestEvent", "(JI[Lcom/moca/rpc/KeyValuePair;I)V", &rpcDispatchRequestMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchResponseEvent (JI[Lcom/moca/rpc/KeyValuePair;I)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchResponseEvent", "(JI[Lcom/moca/rpc/KeyValuePair;I)V", &rpcDispatchResponseMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchPayloadEvent (J[BZ)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchPayloadEvent", "(J[BZ)V", &rpcDispatchPayloadMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchConnectedEvent ()V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchConnectedEvent", "()V", &rpcDispatchConnectedMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchEstablishedEvent ()V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchEstablishedEvent", "()V", &rpcDispatchEstablishedMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchDisconnectedEvent ()V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchDisconnectedEvent", "()V", &rpcDispatchDisconnectedMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC dispatchErrorEvent (ILjava/lang/String;)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchErrorEvent", "(ILjava/lang/String;)V", &rpcDispatchErrorMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC toString ([B)Ljava/lang/String;");
   MOCA_RPC_DO_GOTO(code, getStaticMethodID(env, rpcClass, "toString", "([B)Ljava/lang/String;", &rpcToStringMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC handle, J");
   MOCA_RPC_DO_GOTO(code, getFieldID(env, rpcClass, "handle", "J", &rpcHandleField), error)
+  LOG_TRACE("Loading com/moca/rpc/RPC globalRef, J");
   MOCA_RPC_DO_GOTO(code, getFieldID(env, rpcClass, "globalRef", "J", &rpcGlobalRefField), error)
 
   pthread_key_create(&tlsContext, NULL);
@@ -274,6 +349,7 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved)
   return JNI_VERSION_1_2;
 
 error:
+  LOG_ERROR("Can not initialze class/method/field descriptors");
   fini(env);
   return JNI_ERR;
 }
@@ -336,6 +412,7 @@ void dispatchPacketEvent(JNIEnv *env, int32_t eventType, RPCOpaqueData eventData
 error:
   error.code = code;
   error.message = jniErrorString(code);
+  LOG_ERROR("Could not dispatch packet event. %d:%s", code, error.message);
   dispatchErrorEvent(env, &error, rpc);
 
 cleanupExit:
@@ -359,6 +436,7 @@ void dispatchPayloadEvent(JNIEnv *env, RPCOpaqueData eventData, jobject rpc)
 error:
   error.code = code;
   error.message = jniErrorString(code);
+  LOG_ERROR("Could not dispatch error event. %d:%s", code, error.message);
   dispatchErrorEvent(env, &error, rpc);
 
 cleanupExit:
@@ -519,6 +597,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doResponse(JNIEnv *env, jclass claz
     rawPayload = static_cast<uint8_t *>(env->GetPrimitiveArrayCritical(payload, NULL));
     if (rawPayload == NULL) {
       st = RPC_OUT_OF_MEMORY;
+      LOG_ERROR("Running out of memory when converting payload to java byte array.");
       goto error;
     }
   }
@@ -552,6 +631,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doRequest(JNIEnv *env, jclass clazz
     rawPayload = static_cast<uint8_t *>(env->GetPrimitiveArrayCritical(payload, NULL));
     if (rawPayload == NULL) {
       st = RPC_OUT_OF_MEMORY;
+      LOG_ERROR("Running out of memory when converting payload to java byte array.");
       goto error;
     }
   }
@@ -576,7 +656,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doCreate
   TLSContext ctx = {env};
   pthread_setspecific(tlsContext, &ctx);
   rpc = env->NewGlobalRef(rpc);
-  RPCClient *client = RPCClient::create(timeout, keepalive, 0);
+  RPCClient *client = RPCClient::create(timeout, keepalive, 0, androidLogger);
   env->SetLongField(rpc, rpcHandleField, reinterpret_cast<jlong>(client));
   env->SetLongField(rpc, rpcGlobalRefField, reinterpret_cast<jlong>(rpc));
   int32_t code;
