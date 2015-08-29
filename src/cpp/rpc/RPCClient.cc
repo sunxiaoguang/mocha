@@ -595,7 +595,7 @@ int32_t RPCClientImpl::convertError(const char *func, const char *file, uint32_t
   }
 
   char buffer[128];
-  LOG_ERROR("System error from [%s|%s:%s] . %d:%s", func, file, line, code, strerror_r(errno, buffer, sizeof(buffer)));
+  LOG_ERROR("System error from [%s|%s:%s] . %d:%s", func, file, line, code, strerror_r(errno, buffer, sizeof(buffer)) == 0 ? buffer : "UNKNOWN ERROR");
   return processErrorHook(st);
 }
 

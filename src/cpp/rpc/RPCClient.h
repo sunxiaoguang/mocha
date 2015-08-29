@@ -7,46 +7,7 @@ BEGIN_MOCA_RPC_NAMESPACE
 class RPCClientImpl;
 class RPCClient;
 
-typedef void *RPCOpaqueData;
 typedef void (*EventListener)(const RPCClient *channel, int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData);
-
-enum {
-  EVENT_TYPE_CONNECTED = 1 << 0,
-  EVENT_TYPE_ESTABLISHED = 1 << 1,
-  EVENT_TYPE_DISCONNECTED = 1 << 2,
-  EVENT_TYPE_REQUEST = 1 << 3,
-  EVENT_TYPE_RESPONSE = 1 << 4,
-  EVENT_TYPE_PAYLOAD = 1 << 5,
-  EVENT_TYPE_ERROR = 1 << 6,
-  EVENT_TYPE_LOG = 1 << 7,
-  EVENT_TYPE_ALL = 0xFFFFFFFF,
-};
-
-struct ErrorEventData
-{
-  int32_t code;
-  const char *message;
-};
-
-struct PacketEventData
-{
-  int64_t id;
-  int32_t code;
-  int32_t payloadSize;
-  const KeyValuePairs<StringLite, StringLite> *headers;
-};
-
-typedef PacketEventData RequestEventData;
-typedef PacketEventData ResponseEventData;
-
-struct PayloadEventData
-{
-  int64_t id;
-  int32_t size;
-  int32_t reserved:31;
-  int32_t commit:1;
-  const char *payload;
-};
 
 class RPCClient
 {

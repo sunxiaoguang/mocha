@@ -52,9 +52,9 @@ static bool debugMode = false;
 void androidLogger(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, ...)
 {
   va_list args;
-  char *buffer = static_cast<char *>(malloc(MAX_LOG_LINE_SIZE));
+  int32_t bufferSize = MAX_LOG_LINE_SIZE;
+  char *buffer = static_cast<char *>(malloc(bufferSize));
   char *p = buffer;
-  int32_t bufferSize = static_cast<int32_t>(sizeof(buffer));
   int32_t size;
 
   size = snprintf(p, bufferSize, "[%s|%s:%u] ", func, file, line);

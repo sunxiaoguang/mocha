@@ -47,10 +47,11 @@
 {
   [self extract:channel];
   NSLog(@"Session to server %@@%@:%hu from %@@%@:%hu is established", self.remoteId, self.remoteAddress, self.remotePort, self.localId, self.localAddress, self.localPort);
-  [channel request:2 headers:@[[MCKeyValuePair alloc:@"s" value:@"t.0"], [MCKeyValuePair alloc:@"s" value:@"t.1"], [MCKeyValuePair alloc:@"s" value:@"t.010"],
-         [MCKeyValuePair alloc:@"s" value:@"w.0"], [MCKeyValuePair alloc:@"s" value:@"w.1"], [MCKeyValuePair alloc:@"s" value:@"w.010@2"], [MCKeyValuePair alloc:@"s" value:@"cc"], 
-         [MCKeyValuePair alloc:@"s" value:@"c.0"], [MCKeyValuePair alloc:@"s" value:@"c.1"], [MCKeyValuePair alloc:@"s" value:@"c.010"], [MCKeyValuePair alloc:@"f" value:@""]]
-                       payload:NULL payloadSize:0];
+  [channel request:2 headers:@[[MCKeyValuePair alloc:@"s" value:@"t.0"], [MCKeyValuePair alloc:@"s" value:@"t."], [MCKeyValuePair alloc:@"s" value:@"t.010"],
+         [MCKeyValuePair alloc:@"s" value:@"w.0"], [MCKeyValuePair alloc:@"s" value:@"w."], [MCKeyValuePair alloc:@"s" value:@"w.010"], [MCKeyValuePair alloc:@"s" value:@"cc"], 
+         [MCKeyValuePair alloc:@"s" value:@"c.0"], [MCKeyValuePair alloc:@"s" value:@"c."], [MCKeyValuePair alloc:@"s" value:@"c.010"], [MCKeyValuePair alloc:@"s" value:@"t.028"], 
+         [MCKeyValuePair alloc:@"s" value:@"c.028"], [MCKeyValuePair alloc:@"s" value:@"w.028"], [MCKeyValuePair alloc:@"s" value:@"cfg"]] payload:NULL payloadSize:0];
+  [channel request:8 headers:@[[MCKeyValuePair alloc:@"s" value:@"ganging"]] payload:NULL payloadSize:0];
 }
 
 - (void) onDisconnected:(MCRPC *)channel
@@ -62,13 +63,12 @@
 - (void) onRequest:(MCRPC *)channel id:(int64_t)id code:(int32_t)code payloadSize:(int32_t)payloadSize headers:(NSArray *)headers
 {
   [self extract:channel];
-  sleep(1);
   NSLog(@"Request %lld from server %@@%@:%hu", id, self.remoteId, self.remoteAddress, self.remotePort);
   NSLog(@"Code: %d", code);
   NSLog(@"Headers: %@", headers);
   NSLog(@"%d bytes payload", payloadSize);
   [channel response:id code:(code - 100) headers:headers payload:NULL payloadSize:0];
-  if (code == 4) {
+  if (code == 7) {
     NSLog(@"Session Push");
   } else {
     NSLog(@"Publish");
@@ -124,7 +124,7 @@ int main(int argc, const char **argv)
     NSLog(@"Missing required argument");
     return 1;
   }
-  int numThreads = 128;
+  int numThreads = 1;
   pthread_t threads[numThreads]; 
   for (int idx = 0; idx < numThreads; ++idx) {
     pthread_create(threads + idx, NULL, thread, (void *) argv[1]);

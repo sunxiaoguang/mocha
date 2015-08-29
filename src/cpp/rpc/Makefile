@@ -5,6 +5,7 @@ include $(BUILD_DIR)/make.defs
 
 CPPSRCS += RPCClient.cc RPC.cc
 OBJS += $(addprefix $(OUTDIR)/,$(CPPSRCS:.cc=$(OBJ_SUFFIX)))
+INCLUDE_DIRS += internal
 
 LIB_NAME = MocaRPC
 
