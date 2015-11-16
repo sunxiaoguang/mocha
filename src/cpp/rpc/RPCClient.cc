@@ -1,5 +1,4 @@
 #include "RPCClient.h"
-#include "RPCInternal.h"
 #include <errno.h>
 #include <netinet/tcp.h>
 #include <time.h>
@@ -9,10 +8,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <limits.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <pthread.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <zlib.h>
@@ -22,518 +17,10 @@
 #else
   #define IOV_MAX (8)
 #endif
-#include <poll.h>
 #include <sys/time.h>
+#include "RPCLogging.h"
 
 BEGIN_MOCA_RPC_NAMESPACE
-
-#define INT32_SWAP(value) \
-  ( \
-   ((value & 0x000000ffUL) << 24) | \
-   ((value & 0x0000ff00UL) << 8) | \
-   ((value & 0x00ff0000UL) >> 8) | \
-   ((value & 0xff000000UL) >> 24) \
-  )
-
-#define SECOND (1000000)
-
-#define OFFSET_OF(TYPE, FIELD) (((size_t)(&((TYPE *) sizeof(TYPE))->FIELD)) - sizeof(TYPE))
-#define CHAINED_BUFFER_SIZE(size) MOCA_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
-#define MAX_LOG_LINE_SIZE (4096)
-
-static const size_t MAX_INT32 = 0x7FFFFFFF;
-/* magic code is MOCA in ascii */
-static const uint32_t MAGIC_CODE = 0X4D4F4341;
-
-template<typename T>
-inline T *unsafeGet(void *base, size_t offset)
-{
-  return reinterpret_cast<T *>(static_cast<uint8_t *>(base) + offset);
-}
-
-struct ChainedBuffer
-{
-  ChainedBuffer *next;
-  int32_t size;
-  int32_t capacity;
-  uint8_t buffer[sizeof(int64_t)];
-
-  int32_t available()
-  {
-    return capacity - size;
-  }
-
-  template <typename T>
-  T *allocate()
-  {
-    return allocate<T>(sizeof(T));
-  }
-
-  template <typename T>
-  T *allocate(size_t sz)
-  {
-    return unsafeGet<T>(allocate(sz), 0);
-  }
-
-  uint8_t *allocate(size_t sz)
-  {
-    uint8_t *result = buffer + size;
-    size += sz;
-    return result;
-  }
-
-  ChainedBuffer(int32_t c) : next(NULL), size(0), capacity(c)
-  {
-  }
-
-  static void destroy(ChainedBuffer **bufferAddress, size_t limit = UINTPTR_MAX)
-  {
-    ChainedBuffer *next;
-    ChainedBuffer *buffer = *bufferAddress;
-    while (buffer && limit > 0) {
-      next = buffer->next;
-      free(buffer);
-      buffer = next;
-      --limit;
-    }
-    *bufferAddress = buffer;
-  }
-
-  static ChainedBuffer *create(int32_t size, ChainedBuffer ***nextAddress)
-  {
-    int32_t allocationSize = CHAINED_BUFFER_SIZE(size);
-    int32_t capacity = allocationSize - OFFSET_OF(ChainedBuffer, buffer);
-    ChainedBuffer *newBuffer = new (malloc(allocationSize)) ChainedBuffer(capacity);
-    **nextAddress = newBuffer;
-    *nextAddress = &newBuffer->next;
-    return newBuffer;
-  }
-
-  static ChainedBuffer *checkBuffer(ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextAddress, int32_t *numBuffers, size_t required)
-  {
-    if (!*current || (*current)->available() < static_cast<int32_t>(required)) {
-      *current = ChainedBuffer::create(required, nextAddress);
-      if (!*head) {
-        *head = *current;
-      }
-      (*numBuffers)++;
-    }
-    return *current;
-  }
-
-};
-
-struct Header
-{
-  int64_t id;
-  int32_t code;
-  int32_t flags;
-  int32_t headerSize;
-  int32_t payloadSize;
-};
-
-void
-StringLite::resize(size_t size)
-{
-  if (size_ < size) {
-    if (capacity_ < size + 1) {
-      capacity_ += MOCA_ALIGN(size + 1, 8);
-      content_ = static_cast<char *>(realloc(content_, capacity_));
-    }
-    memset(content_ + size_, ' ', size - size_);
-  }
-  size_ = size;
-  content_[size_] = '\0';
-}
-
-void
-StringLite::append(const char *str, size_t len)
-{
-  if (capacity_ < size_ + len + 1) {
-    capacity_ += MOCA_ALIGN(size_ + len + 1, 8);
-    content_ = static_cast<char *>(realloc(content_, capacity_));
-  }
-  memcpy(content_ + size_, str, len);
-  size_ += len;
-  content_[size_] = '\0';
-}
-
-void
-StringLite::assign(const char *str, size_t len)
-{
-  if (capacity_ < len + 1 || (content_ && capacity_ > len + 16)) {
-    free(content_);
-    capacity_ = MOCA_ALIGN(len + 1, 8);
-    content_ = static_cast<char *>(malloc(capacity_));
-  }
-  memcpy(content_, str, len);
-  content_[len] = '\0';
-  size_ = len;
-}
-
-time_t getDeadline(int64_t timeout)
-{
-  time_t sec = timeout / 1000000;
-  if (sec <= 0) {
-    sec = 1;
-  }
-  return time(NULL) + sec;
-}
-
-bool isTimeout(time_t deadline)
-{
-  return time(NULL) >= deadline;
-}
-
-#ifdef MOCA_RPC_HAS_STL
-void convert(const KeyValueMap &input, KeyValuePairs<StringLite, StringLite> *output)
-{
-  for (KeyValueMapConstIterator it = input.begin(), itend = input.end(); it != itend; ++it) {
-    output->append(it->first, it->second);
-  }
-}
-
-void convert(const KeyValuePairs<StringLite, StringLite> &input, KeyValueMap *output)
-{
-  for (size_t idx = 0, size = input.size(); idx < size; ++idx) {
-    const KeyValuePair<StringLite, StringLite> *pair = input.get(idx);
-    output->insert(make_pair<>(pair->key.str(), pair->value.str()));
-  }
-}
-#endif
-
-const char *errorString(int32_t code)
-{
-  switch (code) {
-    case RPC_OK:
-      return "Ok";
-    case RPC_INVALID_ARGUMENT:
-      return "Invalid argument";
-    case RPC_CORRUPTED_DATA:
-      return "Corrupted data";
-    case RPC_OUT_OF_MEMORY:
-      return "Running out of memory";
-    case RPC_CAN_NOT_CONNECT:
-      return "Can not connect to remote server";
-    case RPC_NO_ACCESS:
-      return "No access";
-    case RPC_NOT_SUPPORTED:
-      return "Not supported";
-    case RPC_TOO_MANY_OPEN_FILE:
-      return "Too many open files";
-    case RPC_INSUFFICIENT_RESOURCE:
-      return "Insufficient resource";
-    case RPC_INTERNAL_ERROR:
-      return "Internal error";
-    case RPC_ILLEGAL_STATE:
-      return "Illegal state";
-    case RPC_TIMEOUT:
-      return "Socket timeout";
-    default:
-      return "Unknown Error";
-  }
-}
-
-class RPCClientImpl
-{
-private:
-  struct EventListenerHandle
-  {
-    EventListener listener;
-    RPCOpaqueData userData;
-    int32_t mask;
-    int32_t reserved;
-    EventListenerHandle(EventListener l = NULL, RPCOpaqueData u = NULL, int32_t m = 0) : listener(l), userData(u), mask(m), reserved(0) { }
-  };
-
-  struct BufferSinkArgument
-  {
-    void *buffer;
-    size_t offset;
-  };
-
-  template<typename T>
-  struct PrimitiveSinkArgument
-  {
-    T *result;
-    size_t offset;
-  };
-
-  struct FirePayloadEventSinkArgument
-  {
-    RPCClientImpl *client;
-    bool commit;
-    int32_t dispatched;
-    int32_t pending;
-    int32_t status;
-  };
-
-  typedef void (*ReadDataSink)(void *source, size_t size, void *argument);
-  typedef int (*GetSocketAddress)(int socket, struct sockaddr *addr, socklen_t *addrLen);
-
-private:
-  enum {
-    NEGOTIATION_FLAG_ACCEPT_ZLIB = 1,
-    PACKET_FLAG_HEADER_ZLIB_ENCODED = 1,
-  };
-  enum {
-    PACKET_TYPE_REQUEST = 0,
-    PACKET_TYPE_RESPONSE = 1,
-    PACKET_TYPE_HINT = 2,
-  };
-
-  enum {
-    HINT_CODE_KEEPALIVE = 0,
-  };
-
-  enum {
-    STATE_NEGOTIATION_MAGIC,
-    STATE_NEGOTIATION_FLAGS,
-    STATE_NEGOTIATION_PEER_ID_SIZE,
-    STATE_NEGOTIATION_PEER_ID,
-    STATE_PACKET_ID,
-    STATE_PACKET_CODE,
-    STATE_PACKET_FLAGS,
-    STATE_PACKET_HEADER_SIZE,
-    STATE_PACKET_PAYLOAD_SIZE,
-    STATE_PACKET_HEADER,
-    STATE_PACKET_PAYLOAD,
-    STATE_START_OVER,
-  };
-
-private:
-  RPCClient *wrapper_;
-  mutable int32_t fd_;
-  mutable int32_t refcount_;
-  int64_t timeout_;
-  int64_t keepalive_;
-  mutable pthread_mutex_t mutex_;
-  pthread_t dispatcherThreadId_;
-  KeyValuePairs<int32_t, EventListenerHandle> listeners_;
-  mutable int32_t pipe_[2];
-  pollfd fdset_[2];
-  bool running_;
-  mutable pthread_mutex_t stateMutex_;
-  int32_t state_;
-  mutable int64_t currentId_;
-
-  ChainedBuffer *writeBuffer_;
-  ChainedBuffer *readBuffer_;
-  ChainedBuffer **nextBuffer_;
-  size_t readAvailable_;
-  size_t readBufferOffset_;
-  mutable pthread_mutex_t pendingMutex_;
-  mutable ChainedBuffer *pendingBuffer_;
-  mutable ChainedBuffer *currentPendingBuffer_;
-  mutable ChainedBuffer **nextPendingBuffer_;
-  mutable int32_t numPendingBuffers_;
-
-  /* negotiation */
-  bool littleEndian_;
-  int32_t version_;
-  int32_t flags_;
-  int32_t peerIdSize_;
-  StringLite peerId_;
-  StringLite localId_;
-
-  /* request */
-  mutable int64_t requestId_;
-  int32_t requestCode_;
-  int32_t requestFlags_;
-  int32_t requestType_;
-  int32_t requestHeaderSize_;
-  int32_t requestPayloadSize_;
-  int32_t dispatchedPayloadSize_;
-  KeyValuePairs<StringLite, StringLite> requestHeaders_;
-
-  RPCLogger rpcLogger_;
-
-  static int32_t emptyData_;
-
-private:
-  int32_t sendNegotiation();
-  int32_t initMultiThread();
-  int32_t initBuffer();
-  int32_t initLocalId();
-
-  static void lock(pthread_mutex_t *mutex);
-  static void unlock(pthread_mutex_t *mutex);
-
-  void lock() const { lock(&mutex_); }
-  void unlock() const { unlock(&mutex_); }
-
-  void lockPending() const { lock(&pendingMutex_); }
-  void unlockPending() const { unlock(&pendingMutex_); }
-
-  void lockState() const { lock(&stateMutex_); }
-  void unlockState() const { unlock(&stateMutex_); }
-
-  bool releaseLocked() const;
-  void addRefLocked() const;
-  int64_t nextRequestId() const;
-
-  void setState(int32_t state) { int32_t oldState; lockState(); oldState = state_; state_ = state; unlockState(); LOG_TRACE("Change state from %d to %d", oldState, state);}
-  int32_t getState() const;
-
-  bool isRunningLocked() const { return running_; }
-  bool isRunning() const;
-
-  void setRunningLocked(bool running) { running_ = running; }
-  void setRunning(bool running);
-
-  static void readToBufferSink(void *data, size_t size, void *userData);
-  static void readToStringSink(void *data, size_t size, void *userData);
-  template<typename T>
-  static void readPrimitiveSink(void *data, size_t size, void *userData);
-  static void firePayloadEventSink(void *data, size_t size, void *userData);
-
-  int32_t doRead(size_t size, ReadDataSink sink, void *sinkUserData, int32_t nextState);
-
-  int32_t doRead(int32_t *result, int32_t nextState) { PrimitiveSinkArgument<int32_t> argument = {result, 0}; return doRead(sizeof(int32_t), readPrimitiveSink<int32_t>, &argument, nextState); }
-  int32_t doRead(int64_t *result, int32_t nextState) { PrimitiveSinkArgument<int64_t> argument = {result, 0}; return doRead(sizeof(int64_t), readPrimitiveSink<int64_t>, &argument, nextState); }
-  int32_t doRead(int32_t size, void *buffer, int32_t nextState) { BufferSinkArgument argument = {buffer, 0}; return doRead(size, readToBufferSink, &argument, nextState); }
-  int32_t doRead(int32_t size, StringLite *string, int32_t nextState)
-  {
-    int32_t st = doRead(size + 1, readToStringSink, string, nextState);
-    if (st == RPC_OK) {
-      string->resize(size);
-    }
-    return st;
-  }
-  int32_t doReadNegotiationMagic();
-  int32_t doReadNegotiationFlags();
-  int32_t doReadNegotiationPeerIdSize() { return doRead(&peerIdSize_, STATE_NEGOTIATION_PEER_ID); }
-  int32_t doReadNegotiationPeerId();
-  int32_t doReadPacketId() { return doRead(&requestId_, STATE_PACKET_CODE); }
-  int32_t doReadPacketCode() { return doRead(&requestCode_, STATE_PACKET_FLAGS); }
-  int32_t doReadPacketFlags()
-  {
-    int32_t status = doRead(&requestFlags_, STATE_PACKET_HEADER_SIZE);
-
-    if (state_ == STATE_PACKET_HEADER_SIZE) {
-      requestType_ = requestFlags_ & 0xFF;
-      requestFlags_ >>= 8;
-    }
-
-    return status;
-  }
-  int32_t doReadPacketHeaderSize() { return doRead(&requestHeaderSize_, STATE_PACKET_PAYLOAD_SIZE); }
-  int32_t doReadPacketPayloadSize();
-  int32_t doReadPacketHeader();
-  int32_t doReadPacketPayload();
-  int32_t doStartOver();
-  int32_t doReadPlainPacketHeader();
-  int32_t doReadCompressedPacketHeader();
-
-  int32_t doRead();
-
-  int32_t fillBuffer();
-
-  ChainedBuffer *checkAndGetBuffer();
-
-  void dispatchHint(PacketEventData *data);
-
-  int32_t doFireEvent(int32_t eventType, RPCOpaqueData eventData) const;
-  int32_t fireConnectedEvent() const { return doFireEvent(EVENT_TYPE_CONNECTED, NULL); }
-  int32_t fireEstablishedEvent() const { return doFireEvent(EVENT_TYPE_ESTABLISHED, NULL); }
-  int32_t fireDisconnectedEvent() const { return doFireEvent(EVENT_TYPE_DISCONNECTED, NULL); }
-  int32_t firePacketEvent();
-  int32_t firePayloadEvent(size_t size, const char *payload, bool commit);
-  int32_t fireErrorEvent(int32_t status, const char *message) const;
-  int32_t doSendPacket(int64_t id, int32_t code, int32_t type, const KeyValuePairs<StringLite, StringLite> *headers,
-      const void *payload, size_t payloadSize) const
-  {
-    if (getState() <= STATE_NEGOTIATION_PEER_ID) {
-      return processErrorHook(RPC_ILLEGAL_STATE);
-    }
-    if (isDispatcherThread()) {
-      return doSendPacketDispatcherThread(id, code, type, headers, payload, payloadSize);
-    } else {
-      return doSendPacketOtherThread(id, code, type, headers, payload, payloadSize);
-    }
-  }
-  int32_t doSendPacketDispatcherThread(int64_t id, int32_t code, int32_t type,
-      const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize) const;
-  int32_t doSendPacketOtherThread(int64_t id, int32_t code, int32_t type,
-      const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize) const;
-
-  int32_t getAddress(GetSocketAddress get, StringLite *localAddress, uint16_t *port) const;
-
-  void clearDispatcherThreadId()
-  {
-    memset(&dispatcherThreadId_, 0, sizeof(dispatcherThreadId_));
-  }
-
-  void updateDispatcherThreadId()
-  {
-    dispatcherThreadId_ = pthread_self();
-  }
-
-  bool isDispatcherThread() const
-  {
-    lock();
-    bool result = pthread_equal(pthread_self(), dispatcherThreadId_);
-    unlock();
-    return result;
-  }
-  bool isDispatcherThreadLocked() const
-  {
-    return pthread_equal(pthread_self(), dispatcherThreadId_);
-  }
-
-  int32_t serialize(int64_t id, ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextBuffer, int32_t *totalSize, int32_t *numBuffers) const;
-  int32_t serialize(const StringLite &data, ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextBuffer, int32_t *totalSize, int32_t *numBuffers) const;
-  int32_t serialize(const KeyValuePairs<StringLite, StringLite> &pairs, ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextBuffer, int32_t *totalSize, int32_t *numBuffers) const;
-  int32_t deserialize(bool swap, void *current, size_t size, KeyValuePairs<StringLite, StringLite> *pairs);
-  int32_t deserialize(bool swap, void *current, size_t *available, StringLite *data);
-
-  void transferToPending(const iovec *iov, size_t iovsize) const;
-
-  void notifyDispatcherThread() const;
-  int32_t processErrorHook(int32_t status) const;
-  int32_t convertError(const char *func, const char *file, uint32_t line) const;
-  int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize) const;
-  int32_t writeFully(int fd, iovec *iov, size_t *iovsize) const;
-
-  static void checkAndClose(int32_t *fd);
-
-public:
-  RPCClientImpl(RPCLogger logger);
-  ~RPCClientImpl();
-
-  int32_t init(RPCClient *client, int64_t timeout, int64_t keepalive, int32_t flags);
-  int32_t connect(const char *address);
-  int32_t addListener(EventListener listener, RPCOpaqueData userData, int32_t eventMask);
-  int32_t removeListener(EventListener listener);
-  int32_t loop(int32_t flags);
-  int32_t breakLoop();
-  void close() const;
-  int32_t keepalive() const
-  {
-    LOG_DEBUG("Send keepalive packet on channel");
-    return doSendPacket(nextRequestId(), HINT_CODE_KEEPALIVE, PACKET_TYPE_HINT, NULL, NULL, 0);
-  }
-  int32_t response(int64_t id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize) const
-  {
-    LOG_DEBUG("Send response %d to request %ld", code, id);
-    return doSendPacket(id, code, PACKET_TYPE_RESPONSE, headers, payload, payloadSize);
-  }
-
-  int32_t request(int64_t *id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize) const
-  {
-    *id = nextRequestId();
-    LOG_DEBUG("Send request %d with code %d", *id, code);
-    return doSendPacket(*id, code, PACKET_TYPE_REQUEST, headers, payload, payloadSize);
-  }
-
-  int32_t localAddress(StringLite *localAddress, uint16_t *port) const;
-  int32_t remoteAddress(StringLite *remoteAddress, uint16_t *port) const;
-  int32_t localId(StringLite *localId) const;
-  int32_t remoteId(StringLite *remoteId) const;
-  int32_t checkAndSendPendingPackets();
-  void addRef() const;
-  bool release() const;
-};
 
 int32_t RPCClientImpl::emptyData_ = 0;
 
@@ -595,7 +82,7 @@ int32_t RPCClientImpl::convertError(const char *func, const char *file, uint32_t
   }
 
   char buffer[128];
-  LOG_ERROR("System error from [%s|%s:%s] . %d:%s", func, file, line, code, strerror_r(errno, buffer, sizeof(buffer)) == 0 ? buffer : "UNKNOWN ERROR");
+  RPC_LOG_ERROR("System error from [%s|%s:%s] . %d:%s", func, file, line, code, strerror_r(errno, buffer, sizeof(buffer)) == 0 ? buffer : "UNKNOWN ERROR");
   return processErrorHook(st);
 }
 
@@ -615,7 +102,7 @@ RPCClientImpl::doWriteFully(int fd, iovec *iov, size_t *iovsize) const
         break;
       }
     } else if (wrote > 0) {
-      LOG_DEBUG("Wrote %zd bytes data to server", wrote);
+      RPC_LOG_DEBUG("Wrote %zd bytes data to server", wrote);
       size_t iovcount = left;
       for (size_t idx = 0; idx < iovcount; ++idx) {
         wrote -= iov[idx].iov_len;
@@ -692,11 +179,11 @@ RPCClientImpl::serialize(const KeyValuePairs<StringLite, StringLite> &pairs, Cha
   for (size_t idx = 0, size = pairs.size(); idx < size; ++idx) {
     const KeyValuePair<StringLite, StringLite> *pair = pairs.get(idx);
     if (MOCA_RPC_FAILED(code = serialize(pair->key, head, current, nextBuffer, totalSize, numBuffers))) {
-      LOG_ERROR("Could not serialize key. %d", code);
+     RPC_LOG_ERROR("Could not serialize key. %d", code);
       return code;
     }
     if (MOCA_RPC_FAILED(code = serialize(pair->value, head, current, nextBuffer, totalSize, numBuffers))) {
-      LOG_ERROR("Could not serialize value. %d", code);
+     RPC_LOG_ERROR("Could not serialize value. %d", code);
       return code;
     }
   }
@@ -734,11 +221,11 @@ RPCClientImpl::deserialize(bool swap, void *buffer, size_t size, KeyValuePairs<S
   size_t available = size;
   while (available > 0) {
     if (MOCA_RPC_FAILED(code = deserialize(swap, unsafeGet<void>(buffer, size - available), &available, &key))) {
-      LOG_ERROR("Could not deserialize key. %d", code);
+     RPC_LOG_ERROR("Could not deserialize key. %d", code);
       break;
     }
     if (MOCA_RPC_FAILED(code = deserialize(swap, unsafeGet<void>(buffer, size - available), &available, &value))) {
-      LOG_ERROR("Could not deserialize value. %d", code);
+     RPC_LOG_ERROR("Could not deserialize value. %d", code);
       break;
     }
     pairs->append(key, value);
@@ -746,13 +233,20 @@ RPCClientImpl::deserialize(bool swap, void *buffer, size_t size, KeyValuePairs<S
   return code;
 }
 
-RPCClientImpl::RPCClientImpl(RPCLogger logger) : wrapper_(NULL), fd_(-1), refcount_(1), timeout_(INT64_MAX),
+RPCClientImpl::RPCClientImpl(RPCLogger logger, LogLevel level, RPCOpaqueData loggerUserData)
+  : wrapper_(NULL), fd_(-1), refcount_(1), timeout_(INT64_MAX),
   keepalive_(INT64_MAX), running_(false), state_(STATE_NEGOTIATION_MAGIC), currentId_(0), writeBuffer_(NULL),
   readBuffer_(NULL), nextBuffer_(&readBuffer_), readAvailable_(0), readBufferOffset_(0), pendingBuffer_(NULL),
   currentPendingBuffer_(NULL), nextPendingBuffer_(&pendingBuffer_), numPendingBuffers_(0), littleEndian_(0),
   version_(0), flags_(NEGOTIATION_FLAG_ACCEPT_ZLIB << 8), peerIdSize_(0), requestId_(0), requestFlags_(0),
-  requestType_(0), requestHeaderSize_(0), requestPayloadSize_(0), dispatchedPayloadSize_(0), rpcLogger_(logger)
+  requestType_(0), requestHeaderSize_(0), requestPayloadSize_(0), dispatchedPayloadSize_(0),
+  logger_(logger), level_(level), loggerUserData_(loggerUserData)
 {
+  if (logger_ == NULL) {
+    logger_ = MocaRPCSimpleLogger;
+    level_ = defaultRPCLoggerLogLevel;
+    loggerUserData_ = &defaultRPCLoggerSink;
+  }
   pipe_[0] = -1;
   pipe_[1] = -1;
   clearDispatcherThreadId();
@@ -891,7 +385,7 @@ RPCClientImpl::doSendPacketOtherThread(int64_t id, int32_t code, int32_t type,
   ChainedBuffer *buffer = NULL;
   ChainedBuffer **nextBuffer = &head;
   int32_t numBuffers = 0;
-  ChainedBuffer::checkBuffer(&head, &buffer, &nextBuffer, &numBuffers, MOCA_ALIGN(payloadSize + sizeof(Header), 4096));
+  ChainedBuffer::checkBuffer(&head, &buffer, &nextBuffer, &numBuffers, MOCA_RPC_ALIGN(payloadSize + sizeof(Header), 4096));
 
   int32_t st;
   bool release = false;
@@ -1012,12 +506,12 @@ RPCClientImpl::connect(const char *address)
 {
   StringLite addressCopy(address);
   const char *ptr = addressCopy.str();
-  LOG_DEBUG("Connecting to %s", address);
+ RPC_LOG_DEBUG("Connecting to %s", address);
   while (*ptr && *ptr != ':') {
     ++ptr;
   }
-  if (*ptr == '\n') {
-    LOG_ERROR("Invalid server address %s", address);
+  if (*ptr == '\0') {
+   RPC_LOG_ERROR("Invalid server address %s", address);
     return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   const char *host = addressCopy.str();
@@ -1032,7 +526,7 @@ RPCClientImpl::connect(const char *address)
   int32_t st = getaddrinfo(host, port, &hints, &tmp);
   fd_ = -1;
   if (st) {
-    LOG_ERROR("Could not get address info for %s", address);
+   RPC_LOG_ERROR("Could not get address info for %s", address);
     return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   struct timeval realTimeout = {static_cast<time_t>(timeout_ / 1000000), static_cast<suseconds_t>(timeout_ % 1000000)};
@@ -1042,12 +536,12 @@ RPCClientImpl::connect(const char *address)
   for (result = tmp; result; result = result->ai_next) {
     if (isTimeout(deadline)) {
       st = RPC_TIMEOUT;
-      LOG_ERROR("Connecting to %s timeout", address);
+     RPC_LOG_ERROR("Connecting to %s timeout", address);
       goto cleanupExit;
     }
     fd_ = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     if (fd_ < 0) {
-      LOG_ERROR("Could not create socket");
+     RPC_LOG_ERROR("Could not create socket");
       continue;
     }
     if (setsockopt(fd_, SOL_SOCKET, SO_SNDTIMEO, &realTimeout, sizeof(realTimeout)) ||
@@ -1057,19 +551,19 @@ RPCClientImpl::connect(const char *address)
         setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) ||
 #endif
         setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled))) {
-      LOG_ERROR("Could not set socket options. %d", errno);
+     RPC_LOG_ERROR("Could not set socket options. %d", errno);
       ::close(fd_);
       fd_ = -1;
       continue;
     }
     if (::connect(fd_, result->ai_addr, result->ai_addrlen) < 0) {
-      LOG_ERROR("Could not connect to remote server. %d", errno);
+     RPC_LOG_ERROR("Could not connect to remote server. %d", errno);
       ::close(fd_);
       fd_ = -1;
       continue;
     }
     if (fcntl(fd_, F_SETFL, fcntl(fd_, F_GETFL, 0) | O_NONBLOCK) == -1) {
-      LOG_ERROR("Could not set socket to nonblocking mode. %d", errno);
+     RPC_LOG_ERROR("Could not set socket to nonblocking mode. %d", errno);
       ::close(fd_);
       fd_ = -1;
       continue;
@@ -1087,10 +581,10 @@ RPCClientImpl::connect(const char *address)
 
     fdset_[1].fd = fd_;
     fdset_[1].events = POLLHUP | POLLIN;
-    LOG_INFO("Channel to %s is connected", address);
+   RPC_LOG_INFO("Channel to %s is connected", address);
     fireConnectedEvent();
     st = sendNegotiation();
-    LOG_INFO("Sent negotiation to %s", address);
+   RPC_LOG_INFO("Sent negotiation to %s", address);
   }
 
 cleanupExit:
@@ -1120,7 +614,7 @@ int32_t
 RPCClientImpl::doRead(size_t size, ReadDataSink sink, void *sinkUserData, int32_t nextState)
 {
   if (readAvailable_ < size) {
-    LOG_TRACE("There are %zd bytes data available when %zd is expected.", readAvailable_, size);
+   RPC_LOG_TRACE("There are %zd bytes data available when %zd is expected.", readAvailable_, size);
     return RPC_WOULDBLOCK;
   }
   readAvailable_ -= size;
@@ -1262,7 +756,7 @@ RPCClientImpl::doReadCompressedPacketHeader()
   ptr = reinterpret_cast<char *>(decompressedBuffer = static_cast<Bytef *>(malloc(originalSize)));
   tmp = originalSize;
   if (uncompress(decompressedBuffer, &tmp, readBuffer + sizeof(int32_t), requestHeaderSize_ - sizeof(int32_t)) != Z_OK) {
-    LOG_ERROR("Corrupted data from server");
+   RPC_LOG_ERROR("Corrupted data from server");
     st = RPC_CORRUPTED_DATA;
     goto cleanupExit;
   }
@@ -1406,7 +900,7 @@ RPCClientImpl::fillBuffer()
       }
       buffer->size += rd;
       readAvailable_ += rd;
-      LOG_TRACE("Read %d bytes data out of tcp buffer", rd);
+      RPC_LOG_INFO("Read %d bytes data out of tcp buffer", rd);
       if (done) {
         break;
       }
@@ -1575,15 +1069,15 @@ RPCClientImpl::init(RPCClient *wrapper, int64_t timeout, int64_t keepalive, int3
   timeout_ = timeout < SECOND ? SECOND : timeout;
   keepalive_ = keepalive < SECOND ? SECOND : keepalive;
   if (MOCA_RPC_FAILED(rc = initBuffer())) {
-    LOG_ERROR("Could not initialize buffer. %d", rc);
+    RPC_LOG_ERROR("Could not initialize buffer. %d", rc);
     return rc;
   }
   if (MOCA_RPC_FAILED(rc = initMultiThread())) {
-    LOG_ERROR("Could not initialize threading support. %d", rc);
+    RPC_LOG_ERROR("Could not initialize threading support. %d", rc);
     return rc;
   }
   if (MOCA_RPC_FAILED(rc = initLocalId())) {
-    LOG_ERROR("Could not initialize local channel id. %d", rc);
+    RPC_LOG_ERROR("Could not initialize local channel id. %d", rc);
     return rc;
   }
   if (pipe(pipe_)) {
@@ -1613,7 +1107,7 @@ RPCClientImpl::unlock(pthread_mutex_t *mutex)
 int32_t
 RPCClientImpl::addListener(EventListener listener, RPCOpaqueData userData, int32_t eventMask)
 {
-  LOG_TRACE("Add listener %p:%p with event mask %d", listener, userData, eventMask);
+  RPC_LOG_TRACE("Add listener %p:%p with event mask %d", listener, userData, eventMask);
   lock();
   int32_t st = RPC_OK;
   EventListenerHandle newHandle(listener, userData, eventMask);
@@ -1647,7 +1141,7 @@ cleanupExit:
 int32_t
 RPCClientImpl::removeListener(EventListener listener)
 {
-  LOG_TRACE("Remove listener %p", listener);
+  RPC_LOG_TRACE("Remove listener %p", listener);
   lock();
 
   bool unlock = true;
@@ -1690,7 +1184,7 @@ RPCClientImpl::checkAndSendPendingPackets()
     ++iovsize;
     buffer = buffer->next;
   }
-  LOG_TRACE("Send %zd bytes %zd buffered pending packets", totalSize, iovsize);
+  RPC_LOG_TRACE("Send %zd bytes %zd buffered pending packets", totalSize, iovsize);
   totalSize = iovsize;
   st = writeFully(fd_, iov, &iovsize);
   if (totalSize != iovsize) {
@@ -1700,10 +1194,10 @@ RPCClientImpl::checkAndSendPendingPackets()
     }
     buffer->size = iov[iovsize].iov_len;
     memmove(buffer->buffer, iov[iovsize].iov_base, buffer->size);
-    LOG_TRACE("There are %zd buffered pending packets not sent", totalSize - iovsize);
+    RPC_LOG_TRACE("There are %zd buffered pending packets not sent", totalSize - iovsize);
   } else {
     nextPendingBuffer_ = &pendingBuffer_;
-    LOG_TRACE("All %zd buffered pending packets are sent", iovsize);
+    RPC_LOG_TRACE("All %zd buffered pending packets are sent", iovsize);
   }
   ChainedBuffer::destroy(&pendingBuffer_, iovsize);
   currentPendingBuffer_ = pendingBuffer_;
@@ -1726,7 +1220,7 @@ RPCClientImpl::loop(int32_t flags)
   int32_t realTimeout = interval == INT64_MAX ? INT32_MAX : interval / 1000;
   bool hasRead = false;
   if (running_) {
-    LOG_ERROR("There is already another thread running loop");
+    RPC_LOG_ERROR("There is already another thread running loop");
     st = RPC_ILLEGAL_STATE;
     goto cleanupExit;
   }
@@ -1748,7 +1242,7 @@ RPCClientImpl::loop(int32_t flags)
         if (!hasRead) {
           hasRead = true;
         }
-        LOG_DEBUG("Recevied data from server");
+        RPC_LOG_DEBUG("Recevied data from server");
         st = doRead();
       }
       if (fdset_[0].revents & POLLIN) {
@@ -1876,9 +1370,9 @@ RPCClient::~RPCClient()
 }
 
 RPCClient *
-RPCClient::create(int64_t timeout, int64_t keepalive, int32_t flags, RPCLogger logger)
+RPCClient::create(int64_t timeout, int64_t keepalive, int32_t flags, RPCLogger logger, LogLevel level, RPCOpaqueData loggerUserData)
 {
-  RPCClientImpl* impl = new RPCClientImpl(logger);
+  RPCClientImpl* impl = new RPCClientImpl(logger, level, loggerUserData);
   RPCClient *client = new RPCClient;
   if (MOCA_RPC_FAILED(impl->init(client, timeout, keepalive, flags))) {
     delete client;
@@ -1931,7 +1425,7 @@ RPCClient::connect(const char *address)
   return impl_->connect(address);
 }
 
-#ifdef MOCA_RPC_HAS_STL
+#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
 int32_t
 RPCClient::response(int64_t id, int32_t code, const KeyValueMap *headers, const void *payload, size_t payloadSize) const
 {
@@ -1985,50 +1479,6 @@ void
 RPCClient::addRef()
 {
   impl_->addRef();
-}
-
-LogLevel
-RPCClient::logLevel(LogLevel level)
-{
-  LogLevel old = defaultLoggerLogLevel_;
-  defaultLoggerLogLevel_ = level;
-  return old;
-}
-
-void RPCClient::defaultLogger(LogLevel level, const char *func, const char *file, uint32_t line, const char *fmt, ...)
-{
-  if (defaultLoggerLogLevel_ >= level) {
-    return;
-  }
-  va_list args;
-  char buffer[MAX_LOG_LINE_SIZE];
-  char *p = buffer;
-  int32_t bufferSize = static_cast<int32_t>(sizeof(buffer));
-  int32_t size;
-  static char levels[] = {'T', 'D', 'I', 'W', 'E', 'F', 'A'};
-
-  time_t now = time(NULL);
-  char timeBuffer[32];
-  ctime_r(&now, timeBuffer);
-  timeBuffer[strlen(timeBuffer) - 1] = '\0';;
-  size = snprintf(p, bufferSize, "%s [%c|%s|%s:%u] ", timeBuffer, levels[level], func, file, line);
-  p += size;
-  bufferSize -= size;
-
-  if (bufferSize > 0) {
-    va_start(args, fmt);
-    size = vsnprintf(p, bufferSize, fmt, args);
-    va_end(args);
-
-    p += size;
-    bufferSize -= size;
-  }
-
-  if (size <= 1) {
-    *p = '\0';
-  }
-
-  printf("%s\n", buffer);
 }
 
 bool

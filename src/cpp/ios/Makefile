@@ -6,7 +6,7 @@ include $(BUILD_DIR)/make.defs
 OCPPSRCS += MCRPC.mm
 
 LIB_NAME = MCRPC
-INCLUDE_DIRS += ../rpc
+INCLUDE_DIRS += ../include ../rpc
 LDFLAGS += -std=c++11 -stdlib=libc++
 CXXFLAGS += -std=c++11 -stdlib=libc++ -fobjc-arc 
 

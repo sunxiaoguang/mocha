@@ -49,8 +49,8 @@
   NSLog(@"Session to server %@@%@:%hu from %@@%@:%hu is established", self.remoteId, self.remoteAddress, self.remotePort, self.localId, self.localAddress, self.localPort);
   [channel request:2 headers:@[[MCKeyValuePair alloc:@"s" value:@"t.0"], [MCKeyValuePair alloc:@"s" value:@"t."], [MCKeyValuePair alloc:@"s" value:@"t.010"],
          [MCKeyValuePair alloc:@"s" value:@"w.0"], [MCKeyValuePair alloc:@"s" value:@"w."], [MCKeyValuePair alloc:@"s" value:@"w.010"], [MCKeyValuePair alloc:@"s" value:@"cc"], 
-         [MCKeyValuePair alloc:@"s" value:@"c.0"], [MCKeyValuePair alloc:@"s" value:@"c."], [MCKeyValuePair alloc:@"s" value:@"c.010"], [MCKeyValuePair alloc:@"s" value:@"t.028"], 
-         [MCKeyValuePair alloc:@"s" value:@"c.028"], [MCKeyValuePair alloc:@"s" value:@"w.028"], [MCKeyValuePair alloc:@"s" value:@"cfg"]] payload:NULL payloadSize:0];
+         [MCKeyValuePair alloc:@"s" value:@"c.0"], [MCKeyValuePair alloc:@"s" value:@"c."], [MCKeyValuePair alloc:@"s" value:@"c.010"], [MCKeyValuePair alloc:@"s" value:@"cfg"], 
+         [MCKeyValuePair alloc:@"s" value:@"l.0"], [MCKeyValuePair alloc:@"s" value:@"l.1"], [MCKeyValuePair alloc:@"s" value:@"l.010"]] payload:NULL payloadSize:0];
   [channel request:8 headers:@[[MCKeyValuePair alloc:@"s" value:@"ganging"]] payload:NULL payloadSize:0];
 }
 
@@ -67,7 +67,7 @@
   NSLog(@"Code: %d", code);
   NSLog(@"Headers: %@", headers);
   NSLog(@"%d bytes payload", payloadSize);
-  [channel response:id code:(code - 100) headers:headers payload:NULL payloadSize:0];
+  //[channel response:id code:(code - 100) headers:headers payload:NULL payloadSize:0];
   if (code == 7) {
     NSLog(@"Session Push");
   } else {
@@ -82,6 +82,7 @@
   NSLog(@"Code: %d", code);
   NSLog(@"Headers: %@", headers);
   NSLog(@"%d bytes payload", payloadSize);
+  //[channel request:8 headers:@[[MCKeyValuePair alloc:@"s" value:@"ganging"]] payload:NULL payloadSize:0];
 }
 
 - (void) onPayload:(MCRPC *)channel id:(int64_t)id commit:(bool)commit payload:(const void *)payload payloadSize:(int32_t)payloadSize

@@ -1,5 +1,5 @@
 #import "MCRPC.h"
-#import "RPCClient.h"
+#import <moca/rpc/RPCClient.h>
 
 using namespace moca::rpc;
 
@@ -218,7 +218,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
     convert(headers, &tmp);
     return client->response(id, code, &tmp, payload, payloadSize);
   } else {
-    return client->response(id, code, NULL, payload, payloadSize);
+    return client->response(id, code, static_cast<KeyValuePairs<StringLite, StringLite> *>(NULL), payload, payloadSize);
   }
 }
 
@@ -260,7 +260,7 @@ void rpcEventListener(const RPCClient *client, int32_t eventType,
     convert(headers, &tmp);
     return client->request(id, code, &tmp, payload, payloadSize);
   } else {
-    return client->request(id, code, NULL, payload, payloadSize);
+    return client->request(id, code, static_cast<KeyValuePairs<StringLite, StringLite> *>(NULL), payload, payloadSize);
   }
 }
 

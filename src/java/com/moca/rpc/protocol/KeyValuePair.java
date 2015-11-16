@@ -1,6 +1,7 @@
 package com.moca.rpc.protocol;
 
 import java.util.*;
+import java.util.function.*;
 
 public final class KeyValuePair
 {
@@ -79,6 +80,34 @@ public final class KeyValuePair
       pairs[idx] = new KeyValuePair(items[offset], items[offset + 1]);
     }
     return pairs;
+  }
+
+  public static void forEach(Function<KeyValuePair, Boolean> action, KeyValuePair ... pairs)
+  {
+    for (KeyValuePair pair : pairs) {
+      if (!action.apply(pair)) {
+        break;
+      }
+    }
+  }
+
+  public static void find(Consumer<KeyValuePair> action, String key, KeyValuePair ... pairs)
+  {
+    forEach(pair -> {
+      if (pair.getKey().equals(key)) {
+        action.accept(pair);
+        return Boolean.FALSE;
+      } else {
+        return Boolean.TRUE;
+      }
+    }, pairs);
+  }
+
+  public static KeyValuePair find(String key, KeyValuePair ... pairs)
+  {
+    KeyValuePair[] result = new KeyValuePair[1];
+    find(pair -> result[0] = pair, key, pairs);
+    return result[0];
   }
 
   public String toString()

@@ -1,5 +1,5 @@
-#include "com_moca_rpc_RPC.h"
-#include "RPCClient.h"
+#include "com_moca_rpc_nano_RPC.h"
+#include <moca/rpc/RPCClient.h>
 #include <pthread.h>
 #include <android/log.h>
 #include <stdio.h>
@@ -49,7 +49,7 @@ static bool debugMode = false;
 #define LOG_FATAL(...) androidLogger(LOG_LEVEL_FATAL, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 #define LOG_ASSERT(...) androidLogger(LOG_LEVEL_ASSERT, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
-void androidLogger(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+void androidLoggerV(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, va_list ap)
 {
   va_list args;
   int32_t bufferSize = MAX_LOG_LINE_SIZE;
@@ -62,16 +62,13 @@ void androidLogger(LogLevel level, const char *tag, const char *func, const char
   bufferSize -= size;
 
   if (bufferSize > 0) {
-    va_start(args, fmt);
-    size = vsnprintf(p, bufferSize, fmt, args);
-    va_end(args);
-
+    size = vsnprintf(p, bufferSize, fmt, ap);
     p += size;
     bufferSize -= size;
   }
 
-  if (size <= 1) {
-    *p = '\0';
+  if (bufferSize == 0) {
+    *(--p) = '\0';
   }
 
   if (level == LOG_LEVEL_ASSERT) {
@@ -82,11 +79,19 @@ void androidLogger(LogLevel level, const char *tag, const char *func, const char
   free(buffer);
 }
 
+void androidLogger(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  androidLoggerV(level, tag, func, file, line, fmt, args);
+  va_end(args);
+}
+
 void androidLogger(LogLevel level, const char *func, const char *file, uint32_t line, const char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
-  androidLogger(level, "RPC", func, file, line, fmt, args);
+  androidLoggerV(level, "RPC", func, file, line, fmt, args);
   va_end(args);
 }
 
@@ -312,36 +317,36 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved)
   MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/RuntimeException", &runtimeExceptionClass), error)
   LOG_TRACE("Loading java/lang/String");
   MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/String", &stringClass), error)
-  LOG_TRACE("Loading com/moca/rpc/KeyValuePair");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/KeyValuePair", &keyValuePairClass), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/RPC", &rpcClass), error)
+  LOG_TRACE("Loading com/moca/rpc/nano/KeyValuePair");
+  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/nano/KeyValuePair", &keyValuePairClass), error)
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC");
+  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/nano/RPC", &rpcClass), error)
 
-  LOG_TRACE("Loading com/moca/rpc/KeyValuePair <init> (Ljava/lang/String;Ljava/lang/String;)V");
+  LOG_TRACE("Loading com/moca/rpc/nano/KeyValuePair <init> (Ljava/lang/String;Ljava/lang/String;)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V", &keyValuePairConstructorMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/KeyValuePair getKey ()Ljava/lang/String;");
+  LOG_TRACE("Loading com/moca/rpc/nano/KeyValuePair getKey ()Ljava/lang/String;");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getKey", "()Ljava/lang/String;", &keyValuePairGetKeyMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/KeyValuePair getValue ()Ljava/lang/String;");
+  LOG_TRACE("Loading com/moca/rpc/nano/KeyValuePair getValue ()Ljava/lang/String;");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getValue", "()Ljava/lang/String;", &keyValuePairGetValueMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchRequestEvent (JI[Lcom/moca/rpc/KeyValuePair;I)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchRequestEvent", "(JI[Lcom/moca/rpc/KeyValuePair;I)V", &rpcDispatchRequestMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchResponseEvent (JI[Lcom/moca/rpc/KeyValuePair;I)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchResponseEvent", "(JI[Lcom/moca/rpc/KeyValuePair;I)V", &rpcDispatchResponseMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchPayloadEvent (J[BZ)V");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchRequestEvent (JI[Lcom/moca/rpc/nano/KeyValuePair;I)V");
+  MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchRequestEvent", "(JI[Lcom/moca/rpc/nano/KeyValuePair;I)V", &rpcDispatchRequestMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchResponseEvent (JI[Lcom/moca/rpc/nano/KeyValuePair;I)V");
+  MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchResponseEvent", "(JI[Lcom/moca/rpc/nano/KeyValuePair;I)V", &rpcDispatchResponseMethod), error)
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchPayloadEvent (J[BZ)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchPayloadEvent", "(J[BZ)V", &rpcDispatchPayloadMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchConnectedEvent ()V");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchConnectedEvent ()V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchConnectedEvent", "()V", &rpcDispatchConnectedMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchEstablishedEvent ()V");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchEstablishedEvent ()V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchEstablishedEvent", "()V", &rpcDispatchEstablishedMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchDisconnectedEvent ()V");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchDisconnectedEvent ()V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchDisconnectedEvent", "()V", &rpcDispatchDisconnectedMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC dispatchErrorEvent (ILjava/lang/String;)V");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC dispatchErrorEvent (ILjava/lang/String;)V");
   MOCA_RPC_DO_GOTO(code, getMethodID(env, rpcClass, "dispatchErrorEvent", "(ILjava/lang/String;)V", &rpcDispatchErrorMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC toString ([B)Ljava/lang/String;");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC toString ([B)Ljava/lang/String;");
   MOCA_RPC_DO_GOTO(code, getStaticMethodID(env, rpcClass, "toString", "([B)Ljava/lang/String;", &rpcToStringMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC handle, J");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC handle, J");
   MOCA_RPC_DO_GOTO(code, getFieldID(env, rpcClass, "handle", "J", &rpcHandleField), error)
-  LOG_TRACE("Loading com/moca/rpc/RPC globalRef, J");
+  LOG_TRACE("Loading com/moca/rpc/nano/RPC globalRef, J");
   MOCA_RPC_DO_GOTO(code, getFieldID(env, rpcClass, "globalRef", "J", &rpcGlobalRefField), error)
 
   pthread_key_create(&tlsContext, NULL);
@@ -515,37 +520,37 @@ jint doGetPort(JNIEnv *env, jlong handle, RPCGetAddress get)
   return port;
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_RPC_doGetLocalAddress(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_moca_rpc_nano_RPC_doGetLocalAddress(JNIEnv *env, jclass clazz, jlong handle)
 {
   return doGetAddress(env, handle, &RPCClient::localAddress);
 }
 
-JNIEXPORT jint JNICALL Java_com_moca_rpc_RPC_doGetLocalPort(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jint JNICALL Java_com_moca_rpc_nano_RPC_doGetLocalPort(JNIEnv *env, jclass clazz, jlong handle)
 {
   return doGetPort(env, handle, &RPCClient::localAddress);
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_RPC_doGetLocalId(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_moca_rpc_nano_RPC_doGetLocalId(JNIEnv *env, jclass clazz, jlong handle)
 {
   return doGetId(env, handle, &RPCClient::localId);
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_RPC_doGetRemoteAddress(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_moca_rpc_nano_RPC_doGetRemoteAddress(JNIEnv *env, jclass clazz, jlong handle)
 {
   return doGetAddress(env, handle, &RPCClient::localAddress);
 }
 
-JNIEXPORT jint JNICALL Java_com_moca_rpc_RPC_doGetRemotePort(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jint JNICALL Java_com_moca_rpc_nano_RPC_doGetRemotePort(JNIEnv *env, jclass clazz, jlong handle)
 {
   return doGetPort(env, handle, &RPCClient::localAddress);
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_RPC_doGetRemoteId(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_moca_rpc_nano_RPC_doGetRemoteId(JNIEnv *env, jclass clazz, jlong handle)
 {
   return doGetId(env, handle, &RPCClient::localId);
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doDestroy(JNIEnv *env, jclass clazz, jobject channel, jlong handle)
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doDestroy(JNIEnv *env, jclass clazz, jobject channel, jlong handle)
 {
   jlong ref = env->GetLongField(channel, rpcGlobalRefField);
   if (ref != INT64_MIN) {
@@ -555,7 +560,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doDestroy(JNIEnv *env, jclass clazz
   getClient(handle)->release();
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doLoop(JNIEnv *env, jclass clazz, jlong handle, jint flags)
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doLoop(JNIEnv *env, jclass clazz, jlong handle, jint flags)
 {
   TLSContext ctx = {env};
   pthread_setspecific(tlsContext, &ctx);
@@ -566,7 +571,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doLoop(JNIEnv *env, jclass clazz, j
   pthread_setspecific(tlsContext, NULL);
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doBreakLoop(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doBreakLoop(JNIEnv *env, jclass clazz, jlong handle)
 {
   int32_t code = getClient(handle)->breakLoop();
   if (MOCA_RPC_FAILED(code)) {
@@ -574,7 +579,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doBreakLoop(JNIEnv *env, jclass cla
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doKeepAlive(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doKeepAlive(JNIEnv *env, jclass clazz, jlong handle)
 {
   int32_t code = getClient(handle)->keepalive();
   if (MOCA_RPC_FAILED(code)) {
@@ -582,7 +587,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doKeepAlive(JNIEnv *env, jclass cla
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doResponse(JNIEnv *env, jclass clazz, jlong handle,
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doResponse(JNIEnv *env, jclass clazz, jlong handle,
     jlong id, jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
   int32_t st;
@@ -616,7 +621,7 @@ cleanupExit:
   return;
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doRequest(JNIEnv *env, jclass clazz, jlong handle,
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doRequest(JNIEnv *env, jclass clazz, jlong handle,
     jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
   int32_t st;
@@ -650,7 +655,7 @@ cleanupExit:
   return;
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_RPC_doCreate
+JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doCreate
   (JNIEnv *env, jclass clazz, jstring address, jlong timeout, jlong keepalive, jobject rpc)
 {
   TLSContext ctx = {env};
