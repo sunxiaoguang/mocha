@@ -601,7 +601,9 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
         if (buffer != null && buffer != input) {
           buffer.release();
         }
-        input.release();
+        if (queued != input) {
+          input.release();
+        }
       }
     }
   }
