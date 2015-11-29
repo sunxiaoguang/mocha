@@ -1,7 +1,11 @@
 #include "com_moca_rpc_nano_RPC.h"
 #include <moca/rpc/RPCClient.h>
 #include <pthread.h>
+#ifdef ANDROID
 #include <android/log.h>
+#else
+#include <assert.h>
+#endif
 #include <stdio.h>
 
 #define RPC_JAVA_EXCEPTION (-1024)
@@ -41,17 +45,30 @@ static jfieldID rpcGlobalRefField = NULL;
 
 static bool debugMode = false;
 
-#define LOG_TRACE(...) androidLogger(LOG_LEVEL_TRACE, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_DEBUG(...) androidLogger(LOG_LEVEL_DEBUG, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_INFO(...) androidLogger(LOG_LEVEL_INFO, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_WARN(...) androidLogger(LOG_LEVEL_WARN, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_ERROR(...) androidLogger(LOG_LEVEL_ERROR, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_FATAL(...) androidLogger(LOG_LEVEL_FATAL, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_ASSERT(...) androidLogger(LOG_LEVEL_ASSERT, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-
-void androidLoggerV(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, va_list ap)
+#ifdef ANDROID
+static void jniLoggerInternal(LogLevel level, const char *tag, const char *log)
 {
-  va_list args;
+  if (level == LOG_LEVEL_ASSERT) {
+    __android_log_assert("", tag, "%s", buffer);
+  } else {
+    __android_log_print((android_LogPriority) (level + (ANDROID_LOG_VERBOSE - LOG_LEVEL_TRACE)), tag, "%s", buffer);
+  }
+}
+#else
+static void jniLoggerInternal(LogLevel level, const char *tag, const char *log)
+{
+  time_t now = time(NULL);
+  char timeBuffer[32];
+  static char levels[] = {'T', 'D', 'I', 'W', 'E', 'F', 'A'};
+  ctime_r(&now, timeBuffer);
+  timeBuffer[strlen(timeBuffer) - 1] = '\0';
+
+  printf("%s [%c:%s\n", timeBuffer, levels[level], log + 1);
+  assert(level != LOG_LEVEL_ASSERT);
+}
+#endif
+static void jniLoggerV(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, va_list ap)
+{
   int32_t bufferSize = MAX_LOG_LINE_SIZE;
   char *buffer = static_cast<char *>(malloc(bufferSize));
   char *p = buffer;
@@ -70,30 +87,33 @@ void androidLoggerV(LogLevel level, const char *tag, const char *func, const cha
   if (bufferSize == 0) {
     *(--p) = '\0';
   }
-
-  if (level == LOG_LEVEL_ASSERT) {
-    __android_log_assert("", tag, "%s", buffer);
-  } else {
-    __android_log_print((android_LogPriority) (level + (ANDROID_LOG_VERBOSE - LOG_LEVEL_TRACE)), tag, "%s", buffer);
-  }
+  jniLoggerInternal(level, tag, buffer);
   free(buffer);
 }
 
-void androidLogger(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+static void jniLogger(LogLevel level, const char *tag, const char *func, const char *file, uint32_t line, const char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
-  androidLoggerV(level, tag, func, file, line, fmt, args);
+  jniLoggerV(level, tag, func, file, line, fmt, args);
   va_end(args);
 }
 
-void androidLogger(LogLevel level, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+static void rpcLogger(LogLevel level, void *opaque, const char *func, const char *file, uint32_t line, const char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
-  androidLoggerV(level, "RPC", func, file, line, fmt, args);
+  jniLoggerV(level, "RPC", func, file, line, fmt, args);
   va_end(args);
 }
+
+#define LOG_TRACE(...) jniLogger(LOG_LEVEL_TRACE, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_DEBUG(...) jniLogger(LOG_LEVEL_DEBUG, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_INFO(...) jniLogger(LOG_LEVEL_INFO, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_WARN(...) jniLogger(LOG_LEVEL_WARN, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_ERROR(...) jniLogger(LOG_LEVEL_ERROR, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_FATAL(...) jniLogger(LOG_LEVEL_FATAL, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_ASSERT(...) jniLogger(LOG_LEVEL_ASSERT, "RPC.jni", __FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
 const char *jniErrorString(int32_t code)
 {
@@ -661,7 +681,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doCreate
   TLSContext ctx = {env};
   pthread_setspecific(tlsContext, &ctx);
   rpc = env->NewGlobalRef(rpc);
-  RPCClient *client = RPCClient::create(timeout, keepalive, 0, androidLogger);
+  RPCClient *client = RPCClient::create(timeout, keepalive, 0, rpcLogger);
   env->SetLongField(rpc, rpcHandleField, reinterpret_cast<jlong>(client));
   env->SetLongField(rpc, rpcGlobalRefField, reinterpret_cast<jlong>(rpc));
   int32_t code;

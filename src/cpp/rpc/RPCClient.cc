@@ -179,11 +179,11 @@ RPCClientImpl::serialize(const KeyValuePairs<StringLite, StringLite> &pairs, Cha
   for (size_t idx = 0, size = pairs.size(); idx < size; ++idx) {
     const KeyValuePair<StringLite, StringLite> *pair = pairs.get(idx);
     if (MOCA_RPC_FAILED(code = serialize(pair->key, head, current, nextBuffer, totalSize, numBuffers))) {
-     RPC_LOG_ERROR("Could not serialize key. %d", code);
+      RPC_LOG_ERROR("Could not serialize key. %d", code);
       return code;
     }
     if (MOCA_RPC_FAILED(code = serialize(pair->value, head, current, nextBuffer, totalSize, numBuffers))) {
-     RPC_LOG_ERROR("Could not serialize value. %d", code);
+      RPC_LOG_ERROR("Could not serialize value. %d", code);
       return code;
     }
   }
@@ -221,11 +221,11 @@ RPCClientImpl::deserialize(bool swap, void *buffer, size_t size, KeyValuePairs<S
   size_t available = size;
   while (available > 0) {
     if (MOCA_RPC_FAILED(code = deserialize(swap, unsafeGet<void>(buffer, size - available), &available, &key))) {
-     RPC_LOG_ERROR("Could not deserialize key. %d", code);
+      RPC_LOG_ERROR("Could not deserialize key. %d", code);
       break;
     }
     if (MOCA_RPC_FAILED(code = deserialize(swap, unsafeGet<void>(buffer, size - available), &available, &value))) {
-     RPC_LOG_ERROR("Could not deserialize value. %d", code);
+      RPC_LOG_ERROR("Could not deserialize value. %d", code);
       break;
     }
     pairs->append(key, value);
@@ -254,6 +254,7 @@ RPCClientImpl::RPCClientImpl(RPCLogger logger, LogLevel level, RPCOpaqueData log
 
 RPCClientImpl::~RPCClientImpl()
 {
+  RPC_LOG_INFO("Destroying rpc channel at %p", this);
   close();
   ChainedBuffer::destroy(&pendingBuffer_);
   ChainedBuffer::destroy(&readBuffer_);
@@ -506,12 +507,12 @@ RPCClientImpl::connect(const char *address)
 {
   StringLite addressCopy(address);
   const char *ptr = addressCopy.str();
- RPC_LOG_DEBUG("Connecting to %s", address);
+  RPC_LOG_DEBUG("Connecting to %s", address);
   while (*ptr && *ptr != ':') {
     ++ptr;
   }
   if (*ptr == '\0') {
-   RPC_LOG_ERROR("Invalid server address %s", address);
+    RPC_LOG_ERROR("Invalid server address %s", address);
     return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   const char *host = addressCopy.str();
@@ -526,7 +527,7 @@ RPCClientImpl::connect(const char *address)
   int32_t st = getaddrinfo(host, port, &hints, &tmp);
   fd_ = -1;
   if (st) {
-   RPC_LOG_ERROR("Could not get address info for %s", address);
+    RPC_LOG_ERROR("Could not get address info for %s", address);
     return processErrorHook(RPC_INVALID_ARGUMENT);
   }
   struct timeval realTimeout = {static_cast<time_t>(timeout_ / 1000000), static_cast<suseconds_t>(timeout_ % 1000000)};
@@ -536,12 +537,12 @@ RPCClientImpl::connect(const char *address)
   for (result = tmp; result; result = result->ai_next) {
     if (isTimeout(deadline)) {
       st = RPC_TIMEOUT;
-     RPC_LOG_ERROR("Connecting to %s timeout", address);
+      RPC_LOG_ERROR("Connecting to %s timeout", address);
       goto cleanupExit;
     }
     fd_ = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     if (fd_ < 0) {
-     RPC_LOG_ERROR("Could not create socket");
+      RPC_LOG_ERROR("Could not create socket");
       continue;
     }
     if (setsockopt(fd_, SOL_SOCKET, SO_SNDTIMEO, &realTimeout, sizeof(realTimeout)) ||
@@ -551,19 +552,19 @@ RPCClientImpl::connect(const char *address)
         setsockopt(fd_, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof(enabled)) ||
 #endif
         setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled))) {
-     RPC_LOG_ERROR("Could not set socket options. %d", errno);
+      RPC_LOG_ERROR("Could not set socket options. %d", errno);
       ::close(fd_);
       fd_ = -1;
       continue;
     }
     if (::connect(fd_, result->ai_addr, result->ai_addrlen) < 0) {
-     RPC_LOG_ERROR("Could not connect to remote server. %d", errno);
+      RPC_LOG_ERROR("Could not connect to remote server. %d", errno);
       ::close(fd_);
       fd_ = -1;
       continue;
     }
     if (fcntl(fd_, F_SETFL, fcntl(fd_, F_GETFL, 0) | O_NONBLOCK) == -1) {
-     RPC_LOG_ERROR("Could not set socket to nonblocking mode. %d", errno);
+      RPC_LOG_ERROR("Could not set socket to nonblocking mode. %d", errno);
       ::close(fd_);
       fd_ = -1;
       continue;
@@ -581,10 +582,10 @@ RPCClientImpl::connect(const char *address)
 
     fdset_[1].fd = fd_;
     fdset_[1].events = POLLHUP | POLLIN;
-   RPC_LOG_INFO("Channel to %s is connected", address);
+    RPC_LOG_INFO("Channel %p is connected to %s", this, address);
     fireConnectedEvent();
     st = sendNegotiation();
-   RPC_LOG_INFO("Sent negotiation to %s", address);
+    RPC_LOG_INFO("Sent negotiation to %s", address);
   }
 
 cleanupExit:
@@ -614,7 +615,7 @@ int32_t
 RPCClientImpl::doRead(size_t size, ReadDataSink sink, void *sinkUserData, int32_t nextState)
 {
   if (readAvailable_ < size) {
-   RPC_LOG_TRACE("There are %zd bytes data available when %zd is expected.", readAvailable_, size);
+    RPC_LOG_TRACE("There are %zd bytes data available when %zd is expected.", readAvailable_, size);
     return RPC_WOULDBLOCK;
   }
   readAvailable_ -= size;
@@ -756,7 +757,7 @@ RPCClientImpl::doReadCompressedPacketHeader()
   ptr = reinterpret_cast<char *>(decompressedBuffer = static_cast<Bytef *>(malloc(originalSize)));
   tmp = originalSize;
   if (uncompress(decompressedBuffer, &tmp, readBuffer + sizeof(int32_t), requestHeaderSize_ - sizeof(int32_t)) != Z_OK) {
-   RPC_LOG_ERROR("Corrupted data from server");
+    RPC_LOG_ERROR("Corrupted data from server");
     st = RPC_CORRUPTED_DATA;
     goto cleanupExit;
   }

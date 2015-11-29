@@ -3,12 +3,17 @@ BUILD_DIR ?= $(PROJECT_HOME)/build/make
 
 include $(BUILD_DIR)/make.defs
 
-CPPSRCS += com_moca_rpc_RPC.cc RPC.cc
+CPPFLAGS += -DMOCA_RPC_NANO
 
-INCLUDE_DIRS += ../../rpc
+CPPSRCS += com_moca_rpc_nano_RPC.cc RPCClient.cc RPCNano.cc RPCLogging.cc
 
-SOTARGET = mocarpc_jni
+INCLUDE_DIRS += ../../include ../../rpc
 
+SOTARGET = mocarpc_nano_jni
+
+ifeq ($(THE_OS), linux)
 DEPLIBS += uuid
+endif
+DEPLIBS += z
 
 include $(BUILD_DIR)/make.rules
