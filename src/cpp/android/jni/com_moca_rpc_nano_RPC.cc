@@ -20,6 +20,7 @@ using namespace moca::rpc;
 struct TLSContext
 {
   JNIEnv *env;
+  TLSContext(JNIEnv *e) : env(e) { }
 };
 
 pthread_key_t tlsContext;
@@ -45,13 +46,36 @@ static jfieldID rpcGlobalRefField = NULL;
 
 static bool debugMode = false;
 
+class TlsContextHelper
+{
+private:
+  TLSContext context_;
+  bool cleanup_;
+public:
+  TlsContextHelper(JNIEnv *env) : context_(env), cleanup_(false)
+  {
+    if (!pthread_getspecific(tlsContext)) {
+      pthread_setspecific(tlsContext, &context_);
+      cleanup_ = true;
+    }
+  }
+  ~TlsContextHelper()
+  {
+    if (cleanup_) {
+      pthread_setspecific(tlsContext, NULL);
+    }
+  }
+};
+
+#define CHECK_AND_INIT_TLS_CONTEXT
+
 #ifdef ANDROID
 static void jniLoggerInternal(LogLevel level, const char *tag, const char *log)
 {
   if (level == LOG_LEVEL_ASSERT) {
-    __android_log_assert("", tag, "%s", buffer);
+    __android_log_assert("", tag, "%s", log);
   } else {
-    __android_log_print((android_LogPriority) (level + (ANDROID_LOG_VERBOSE - LOG_LEVEL_TRACE)), tag, "%s", buffer);
+    __android_log_print((android_LogPriority) (level + (ANDROID_LOG_VERBOSE - LOG_LEVEL_TRACE)), tag, "%s", log);
   }
 }
 #else
@@ -506,6 +530,7 @@ typedef int32_t (RPCClient::*RPCGetId)(StringLite *address) const;
 
 jstring doGetAddress(JNIEnv *env, jlong handle, RPCGetAddress get)
 {
+  TlsContextHelper helper(env);
   StringLite str;
   int32_t code = (getClient(handle)->*get)(&str, NULL);
   jstring result = NULL;
@@ -519,6 +544,7 @@ jstring doGetAddress(JNIEnv *env, jlong handle, RPCGetAddress get)
 
 jstring doGetId(JNIEnv *env, jlong handle, RPCGetId get)
 {
+  TlsContextHelper helper(env);
   StringLite str;
   int32_t code = (getClient(handle)->*get)(&str);
   jstring result = NULL;
@@ -532,6 +558,7 @@ jstring doGetId(JNIEnv *env, jlong handle, RPCGetId get)
 
 jint doGetPort(JNIEnv *env, jlong handle, RPCGetAddress get)
 {
+  TlsContextHelper helper(env);
   uint16_t port = 0;
   int32_t code = (getClient(handle)->*get)(NULL, &port);
   if (MOCA_RPC_FAILED(code)) {
@@ -572,6 +599,7 @@ JNIEXPORT jstring JNICALL Java_com_moca_rpc_nano_RPC_doGetRemoteId(JNIEnv *env, 
 
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doDestroy(JNIEnv *env, jclass clazz, jobject channel, jlong handle)
 {
+  TlsContextHelper helper(env);
   jlong ref = env->GetLongField(channel, rpcGlobalRefField);
   if (ref != INT64_MIN) {
     env->DeleteGlobalRef(reinterpret_cast<jobject>(ref));
@@ -582,17 +610,16 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doDestroy(JNIEnv *env, jclass 
 
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doLoop(JNIEnv *env, jclass clazz, jlong handle, jint flags)
 {
-  TLSContext ctx = {env};
-  pthread_setspecific(tlsContext, &ctx);
+  TlsContextHelper helper(env);
   int32_t code = getClient(handle)->loop(flags);
   if (MOCA_RPC_FAILED(code)) {
     runtimeException(env, code);
   }
-  pthread_setspecific(tlsContext, NULL);
 }
 
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doBreakLoop(JNIEnv *env, jclass clazz, jlong handle)
 {
+  TlsContextHelper helper(env);
   int32_t code = getClient(handle)->breakLoop();
   if (MOCA_RPC_FAILED(code)) {
     runtimeException(env, code);
@@ -601,6 +628,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doBreakLoop(JNIEnv *env, jclas
 
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doKeepAlive(JNIEnv *env, jclass clazz, jlong handle)
 {
+  TlsContextHelper helper(env);
   int32_t code = getClient(handle)->keepalive();
   if (MOCA_RPC_FAILED(code)) {
     runtimeException(env, code);
@@ -610,6 +638,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doKeepAlive(JNIEnv *env, jclas
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doResponse(JNIEnv *env, jclass clazz, jlong handle,
     jlong id, jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
+  TlsContextHelper helper(env);
   int32_t st;
   KeyValuePairs<StringLite, StringLite> *pairs = NULL;
   KeyValuePairs<StringLite, StringLite> realPairs;
@@ -644,6 +673,7 @@ cleanupExit:
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doRequest(JNIEnv *env, jclass clazz, jlong handle,
     jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
+  TlsContextHelper helper(env);
   int32_t st;
   KeyValuePairs<StringLite, StringLite> *pairs = NULL;
   KeyValuePairs<StringLite, StringLite> realPairs;
@@ -678,8 +708,7 @@ cleanupExit:
 JNIEXPORT void JNICALL Java_com_moca_rpc_nano_RPC_doCreate
   (JNIEnv *env, jclass clazz, jstring address, jlong timeout, jlong keepalive, jobject rpc)
 {
-  TLSContext ctx = {env};
-  pthread_setspecific(tlsContext, &ctx);
+  TlsContextHelper helper(env);
   rpc = env->NewGlobalRef(rpc);
   RPCClient *client = RPCClient::create(timeout, keepalive, 0, rpcLogger);
   env->SetLongField(rpc, rpcHandleField, reinterpret_cast<jlong>(client));
@@ -702,5 +731,4 @@ cleanupExit:
   if (str) {
     env->ReleaseStringUTFChars(address, str);
   }
-  pthread_setspecific(tlsContext, NULL);
 }
