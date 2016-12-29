@@ -28,7 +28,7 @@ public class EventLoopGroupFactory
     if (group != null) {
       return group.shutdownGracefully();
     } else {
-      return RPCFuture.completed();
+      return CompletedFuture.instance();
     }
   }
 }

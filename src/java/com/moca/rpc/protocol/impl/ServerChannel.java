@@ -15,14 +15,14 @@ import io.netty.handler.timeout.*;
 import io.netty.handler.ssl.*;
 import io.netty.handler.logging.*;
 
-public class ServerChannel extends ChannelImpl
+public class ServerChannel extends JavaChannel
 {
   private EventLoopGroup parentGroup;
   private EventLoopGroup childGroup;
   private io.netty.channel.Channel listenChannel;
   private static Logger logger = LoggerFactory.getLogger(ServerChannel.class);
 
-  public ServerChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int keepaliveInterval, int limit, boolean debug, SslContext ssl)
+  public ServerChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int keepaliveInterval, int limit, boolean debug, Object ssl)
   {
     super(id, true);
     boolean cleanup = true;
@@ -38,7 +38,7 @@ public class ServerChannel extends ChannelImpl
           @Override
           protected void initChannel(SocketChannel ch)
           {
-            final ChannelImpl newChannel = new ChannelImpl(id, false);
+            final JavaChannel newChannel = new JavaChannel(id, false);
             ChannelPipeline pipeline = ch.pipeline();
             final int finalTimeout = (timeout <= 0 ? Integer.MAX_VALUE : timeout) * 1000;
             final int finalKeepaliveInterval = (keepaliveInterval <= 0 ? Integer.MAX_VALUE : keepaliveInterval) * 1000;
@@ -59,7 +59,7 @@ public class ServerChannel extends ChannelImpl
               });
             }
             if (ssl != null) {
-              pipeline.addLast(ssl.newHandler(ch.alloc()));
+              pipeline.addLast(((SslContext) ssl).newHandler(ch.alloc()));
             }
             pipeline.addLast("Handler", new RPCHandler(newChannel, listener, limit, true));
           }
@@ -82,7 +82,7 @@ public class ServerChannel extends ChannelImpl
   {
     return new RPCFuture(new Future[] {
         super.shutdown(),
-        listenChannel != null ? listenChannel.close() : RPCFuture.completed(),
+        listenChannel != null ? listenChannel.close() : CompletedFuture.instance(),
         stopListenEventLoopGroup(parentGroup),
         stopSocketEventLoopGroup(childGroup),
     });

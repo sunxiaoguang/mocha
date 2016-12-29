@@ -11,13 +11,6 @@ public class RPCFuture implements Future<Void>
   {
   }
 
-  private static RPCFuture COMPLETED_FUTURE = new RPCFuture();
-
-  public static RPCFuture completed()
-  {
-    return COMPLETED_FUTURE;
-  }
-
   public RPCFuture(Future[] futures)
   {
     this.futures = Arrays.copyOf(futures, futures.length);

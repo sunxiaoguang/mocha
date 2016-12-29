@@ -55,7 +55,7 @@ public class TestServer implements ChannelListener
 
   public void run(String address) throws Exception
   {
-    ChannelImpl channel = (ChannelImpl) (Channel.builder().bind(address).listener(this).build());
+    ChannelImpl channel = (ChannelImpl) (new ChannelBuilder().bind(address).listener(this).build());
   }
 
   public static void main(String args[]) throws Exception

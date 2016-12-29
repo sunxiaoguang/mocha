@@ -17,9 +17,30 @@
     <fileset refid="slf4j-simple-latest.jar"/>
   </path>
 
-  <target name="compile" depends="common-compile, common-compile-test" />
+  <target name="compile-nano" depends="common-prepare">
+    <javac destdir="${classes.dir}" encoding="${javac.encoding}" 
+      debug="${javac.debug}" source="1.5" target="1.5" 
+      fork="${javac.fork}" includeAntRuntime="${javac.includeAntRuntime}">
+      <src path="${java.src.dir}"/>
+      <include name="com/moca/rpc/protocol/*.java"/>
+      <include name="com/moca/rpc/protocol/impl/Jni*.java"/>
+      <include name="com/moca/rpc/protocol/impl/ChannelImpl.java"/>
+      <include name="com/moca/rpc/protocol/impl/CompletedFuture.java"/>
+    </javac>
+  </target>
+  <target name="compile" depends="compile-nano, common-compile-test" />
 
-  <target name="package" depends="common-package"/>
+  <target name="package-nano" depends="compile-nano">
+    <jar destfile="${lib.dir}/moca-rpcnano-current.jar">
+      <fileset dir="${classes.dir}">
+        <include name="com/moca/rpc/protocol/*.class"/>
+        <include name="com/moca/rpc/protocol/impl/Jni*.class"/>
+        <include name="com/moca/rpc/protocol/impl/ChannelImpl.class"/>
+        <include name="com/moca/rpc/protocol/impl/CompletedFuture.class"/>
+      </fileset>
+    </jar>
+  </target>
+  <target name="package" depends="package-nano, common-package"/>
   <target name="fat-jar" depends="compile">
     <jar destfile="${build.lib.dir}/moca-rpc-test.jar">
       <fileset dir="${classes.dir}"/>

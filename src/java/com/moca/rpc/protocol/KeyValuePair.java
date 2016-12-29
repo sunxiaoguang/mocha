@@ -82,6 +82,7 @@ public final class KeyValuePair
     return pairs;
   }
 
+  /*
   public static void forEach(Function<KeyValuePair, Boolean> action, KeyValuePair ... pairs)
   {
     for (KeyValuePair pair : pairs) {
@@ -102,12 +103,16 @@ public final class KeyValuePair
       }
     }, pairs);
   }
+  */
 
   public static KeyValuePair find(String key, KeyValuePair ... pairs)
   {
-    KeyValuePair[] result = new KeyValuePair[1];
-    find(pair -> result[0] = pair, key, pairs);
-    return result[0];
+    for (KeyValuePair pair : pairs) {
+      if (pair.getKey().equals(key)) {
+        return pair;
+      }
+    }
+    return null;
   }
 
   public String toString()

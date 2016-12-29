@@ -17,11 +17,11 @@ import io.netty.handler.timeout.*;
 
 import com.moca.rpc.protocol.*;
 
-public class ClientChannel extends ChannelImpl
+public class ClientChannel extends JavaChannel
 {
   private EventLoopGroup loopGroup;
 
-  public ClientChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int keepaliveInterval, int limit, boolean debug, SslContext ssl)
+  public ClientChannel(String id, final ChannelListener listener, InetSocketAddress address, int timeout, int keepaliveInterval, int limit, boolean debug, Object ssl)
   {
     super(id, true);
     boolean cleanup = true;
@@ -56,7 +56,7 @@ public class ClientChannel extends ChannelImpl
               });
             }
             if (ssl != null) {
-              pipeline.addLast(ssl.newHandler(ch.alloc()));
+              pipeline.addLast(((SslContext) ssl).newHandler(ch.alloc()));
             }
             pipeline.addLast(new RPCHandler(ClientChannel.this, listener, limit, true));
           }

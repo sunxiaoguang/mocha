@@ -2,33 +2,71 @@
 #define __MOCA_RPC_INTERNAL_H__ 1
 #include <moca/rpc/RPCDecl.h>
 
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
-#include <atomic>
-
+#include "RPCLite.h"
+#if !defined(MOCA_RPC_NANO)
+#include <uv.h>
 BEGIN_MOCA_RPC_NAMESPACE
-using namespace std;
-
-template<typename T>
-class RPCAtomic
+class RPCCompletionToken
 {
 private:
-  mutable atomic<T> number_;
+  uv_mutex_t asyncMutex_;
+  uv_cond_t asyncCond_;
+  bool asyncFinished_;
+  int32_t initialized_;
+  int32_t asyncStatus_;
 
 public:
-  RPCAtomic() : number_(0) { }
-  RPCAtomic(T initValue) : number_(initValue) { }
-  T add(T number) const { return number_.fetch_add(number); }
-  T subtract(T number) const { return number_.fetch_sub(number); }
-  bool compareAndSet(const T &expect, const T &value) const { return number_.compare_exchange_strong(expect, value); }
-  T get() const { return number_.load(); }
-  void set(const T &val) { number_.store(val); }
+  RPCCompletionToken() : asyncFinished_(false), initialized_(0), asyncStatus_(0) {
+    memset(&asyncMutex_, 0, sizeof(asyncMutex_));
+    memset(&asyncCond_, 0, sizeof(asyncCond_));
+  }
+  int32_t init() {
+    int32_t st;
+    if ((st = uv_mutex_init(&asyncMutex_))) {
+      return st;
+    }
+    ++initialized_;
+    if ((st = uv_cond_init(&asyncCond_))) {
+      return st;
+    }
+    ++initialized_;
+    return 0;
+  }
+  ~RPCCompletionToken() {
+    if (initialized_) {
+      uv_mutex_destroy(&asyncMutex_);
+      if (--initialized_) {
+        uv_cond_destroy(&asyncCond_);
+      }
+    }
+  }
+
+  void finish(int32_t st = 0)
+  {
+    uv_mutex_lock(&asyncMutex_);
+    asyncFinished_ = true;
+    asyncStatus_ = st;
+    uv_cond_broadcast(&asyncCond_);
+    uv_mutex_unlock(&asyncMutex_);
+  }
+
+  void start()
+  {
+    ScopedMutex mutex(&asyncMutex_);
+    asyncFinished_ = false;
+    asyncStatus_ = 0;
+  }
+
+  int32_t wait()
+  {
+    ScopedMutex mutex(&asyncMutex_);
+    while (!asyncFinished_) {
+      uv_cond_wait(&asyncCond_, &asyncMutex_);
+    }
+    return asyncStatus_;
+  }
 };
-
 END_MOCA_RPC_NAMESPACE
-
-#define MOCA_RPC_ATOMIC_DEFINED 1
 #endif
-
-#include "RPCLite.h"
 
 #endif

@@ -1,11 +1,12 @@
-#include "RPC.h"
+#include <moca/rpc/RPCChannelNano.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <cinttypes>
 
 using namespace moca::rpc;
 int64_t authRequestId = 0;
 
-void eventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
+void eventListener(const RPCChannelNano *channel, int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
 {
   StringLite remoteAddress;
   uint16_t remotePort;
@@ -18,26 +19,24 @@ void eventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData ev
   StringLite localId;
   channel->localId(&localId);
   switch (eventType) {
-    case EVENT_TYPE_CONNECTED:
+    case EVENT_TYPE_CHANNEL_CONNECTED:
       printf("Connected to server %s@%s:%u from %s@%s:%u\n", remoteId.str(), remoteAddress.str(), remotePort, localId.str(), localAddress.str(), localPort);
       break;
-    case EVENT_TYPE_ESTABLISHED:
+    case EVENT_TYPE_CHANNEL_ESTABLISHED:
       {
         printf("Session to server %s@%s:%u from %s@%s:%u is established\n", remoteId.str(), remoteAddress.str(), remotePort, localId.str(), localAddress.str(), localPort);
         KeyValuePairs<StringLite, StringLite> headers;
-        headers.append("u", "1");
-        headers.append("s", "s");
-        headers.append("k", "k");
+        RPCPacketHeaders::save(&headers, "u", RPCPacketHeaders::CSTRING, "1", "s", RPCPacketHeaders::CSTRING, "s", RPCPacketHeaders::CSTRING, "k", NULL);
         channel->request(&authRequestId, 1, &headers);
       }
       break;
-    case EVENT_TYPE_DISCONNECTED:
+    case EVENT_TYPE_CHANNEL_DISCONNECTED:
       printf("Disconnected from server\n");
       break;
-    case EVENT_TYPE_REQUEST:
+    case EVENT_TYPE_CHANNEL_REQUEST:
       {
         RequestEventData *data = static_cast<RequestEventData *>(eventData);
-        printf("Request %lld from server %s@%s:%u\n", data->id, remoteId.str(), remoteAddress.str(), remotePort);
+        printf("Request %" PRId64 " from server %s@%s:%u\n", data->id, remoteId.str(), remoteAddress.str(), remotePort);
         printf("Code: %d\n", data->code);
         for (size_t idx = 0, size = data->headers->size(); idx < size; ++idx) {
           const KeyValuePair<StringLite, StringLite> *pair = data->headers->get(idx);
@@ -51,10 +50,10 @@ void eventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData ev
         }
       }
       break;
-    case EVENT_TYPE_RESPONSE:
+    case EVENT_TYPE_CHANNEL_RESPONSE:
       {
         RequestEventData *data = static_cast<RequestEventData *>(eventData);
-        printf("Response %lld from server %s@%s:%u\n", data->id, remoteId.str(), remoteAddress.str(), remotePort);
+        printf("Response %" PRId64 " from server %s@%s:%u\n", data->id, remoteId.str(), remoteAddress.str(), remotePort);
         printf("Code: %d\n", data->code);
         for (size_t idx = 0, size = data->headers->size(); idx < size; ++idx) {
           const KeyValuePair<StringLite, StringLite> *pair = data->headers->get(idx);
@@ -70,19 +69,19 @@ void eventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData ev
         }
       }
       break;
-    case EVENT_TYPE_PAYLOAD:
+    case EVENT_TYPE_CHANNEL_PAYLOAD:
       {
         PayloadEventData *data = static_cast<PayloadEventData *>(eventData);
-        printf("Payload of request %lld from server %s@%s:%u\n", data->id, remoteId.str(), remoteAddress.str(), remotePort);
+        printf("Payload of request %" PRId64 " from server %s@%s:%u\n", data->id, remoteId.str(), remoteAddress.str(), remotePort);
         printf("Size : %d\n", data->size);
-        printf("Payload : %lld\n", (*(int64_t *) data->payload));
+        printf("Payload : %" PRId64 "\n", (*(int64_t *) data->payload));
         printf("Commit : %s\n", data->commit ? "true" : "false");
       }
       break;
-    case EVENT_TYPE_ERROR:
+    case EVENT_TYPE_CHANNEL_ERROR:
       {
         ErrorEventData *data = static_cast<ErrorEventData *>(eventData);
-        printf("Error %d:%s\n", data->code, data->message.str());
+        printf("Error %d:%s\n", data->code, data->message);
       }
       break;
   }
@@ -90,14 +89,10 @@ void eventListener(const RPCClient *channel, int32_t eventType, RPCOpaqueData ev
 
 int main(int argc, char **argv)
 {
-  RPCClient *client = RPCClient::create(1000000000l);
+  auto builder = RPCChannelNano::newBuilder();
+  RPCChannelNano *client = builder->connect(argv[1])->listener(eventListener, NULL)->timeout(1000000000l)->build();
   if (!client) {
     printf("Could not create\n");
-    return 1;
-  }
-  client->addListener(eventListener);
-  if (MOCA_RPC_FAILED(client->connect("127.0.0.1:1234"))) {
-    printf("Could not connect\n");
     return 1;
   }
   while (true) {

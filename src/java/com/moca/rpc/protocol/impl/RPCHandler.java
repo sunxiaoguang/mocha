@@ -32,7 +32,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   private NegotiationReader negotiationReader = new NegotiationReader();
   private HeaderReader headerReader = new HeaderReader();
   private PayloadReader payloadReader = new PayloadReader();
-  private ChannelImpl channel;
+  private JavaChannel channel;
   private ChannelListener listener;
   private ByteBuf queued;
   private int numberOfQueuedComponents;
@@ -197,8 +197,8 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
       buffer = buffer.order(order);
       peerIdLength = readInt(buffer, STATE_READ_PEER_ID);
       if (isState(STATE_READ_PEER_ID)) {
-        if (peerIdLength > ChannelImpl.MAX_CHANNEL_ID_LENGTH) {
-          throw new RuntimeException("Peer ID length " + peerIdLength + " is greater than max limit of " + ChannelImpl.MAX_CHANNEL_ID_LENGTH);
+        if (peerIdLength > JavaChannel.MAX_CHANNEL_ID_LENGTH) {
+          throw new RuntimeException("Peer ID length " + peerIdLength + " is greater than max limit of " + JavaChannel.MAX_CHANNEL_ID_LENGTH);
         }
         peerId = Unpooled.buffer(peerIdLength + 1);
       }
@@ -429,7 +429,7 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
     }
   }
 
-  public RPCHandler(ChannelImpl channel, ChannelListener listener, int limit, boolean sendNegotiation) {
+  public RPCHandler(JavaChannel channel, ChannelListener listener, int limit, boolean sendNegotiation) {
     this.channel = channel;
     this.listener = listener;
     this.limit = limit;
@@ -440,8 +440,8 @@ public class RPCHandler extends ChannelInboundHandlerAdapter
   {
     String id = channel.getLocalId();
     byte[] idBytes = run(() -> id.getBytes("UTF-8"));
-    if (idBytes.length > ChannelImpl.MAX_CHANNEL_ID_LENGTH) {
-      throw new RuntimeException("Size of channel id " + idBytes.length + " is greater than limit of " + ChannelImpl.MAX_CHANNEL_ID_LENGTH);
+    if (idBytes.length > JavaChannel.MAX_CHANNEL_ID_LENGTH) {
+      throw new RuntimeException("Size of channel id " + idBytes.length + " is greater than limit of " + JavaChannel.MAX_CHANNEL_ID_LENGTH);
     }
     ByteBuf buffer = Unpooled.buffer(4 + 4 + 4).order(ByteOrder.nativeOrder());
     buffer.writeInt(0X4D4F4341);

@@ -50,7 +50,7 @@ public class TestClient implements ChannelListener
 
   public void run(String address) throws Exception
   {
-    Channel channel = Channel.builder().connect(address).listener(this).build();
+    Channel channel = new ChannelBuilder().connect(address).listener(this).build();
   }
 
   public static void main(String args[]) throws Exception

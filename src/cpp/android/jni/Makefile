@@ -5,7 +5,7 @@ include $(BUILD_DIR)/make.defs
 
 CPPFLAGS += -DMOCA_RPC_NANO
 
-CPPSRCS += com_moca_rpc_nano_RPC.cc RPCClient.cc RPCNano.cc RPCLogging.cc
+CPPSRCS += JniChannel.cc RPCChannelNano.cc RPCNano.cc RPCChannelEasy.cc RPCProtocol.cc RPCLogging.cc
 
 INCLUDE_DIRS += ../../include ../../rpc
 
