@@ -363,6 +363,7 @@ RPCChannelImpl::initSocket(int32_t domain)
   } else {
     handle_.data = this;
   }
+  uv_tcp_keepalive(&handle_, 1, keepaliveInterval_ > 1000000 ? keepaliveInterval_ / 1000000 : 120);
   return st;
 }
 

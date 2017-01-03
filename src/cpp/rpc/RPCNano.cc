@@ -2,6 +2,7 @@
 #include "RPCNano.h"
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
 BEGIN_MOCA_RPC_NAMESPACE
 void
@@ -142,6 +143,80 @@ getInetAddressPresentation(const sockaddr_storage *addr, StringLite *address, ui
     }
   }
   return RPC_OK;
+}
+
+RPCMutex::RPCMutex()
+{
+  int32_t rc = pthread_mutex_init(&mutex_, NULL);
+  if (rc != 0) {
+    abort();
+  }
+}
+
+RPCMutex::~RPCMutex()
+{
+  int32_t rc = pthread_mutex_destroy(&mutex_);
+  if (rc != 0) {
+    abort();
+  }
+}
+
+void RPCMutex::lock() const
+{
+  pthread_mutex_lock(&mutex_);
+}
+
+void RPCMutex::unlock() const
+{
+  pthread_mutex_unlock(&mutex_);
+}
+
+RPCCondVar::RPCCondVar()
+{
+  pthread_cond_init(&cond_, NULL);
+}
+
+RPCCondVar::~RPCCondVar()
+{
+  pthread_cond_destroy(&cond_);
+}
+
+void
+RPCCondVar::wait(const RPCMutex &mutex)
+{
+  pthread_cond_wait(&cond_, &mutex.mutex_);
+}
+
+void
+RPCCondVar::broadcast()
+{
+  pthread_cond_broadcast(&cond_);
+}
+
+void
+RPCCondVar::signal()
+{
+  pthread_cond_signal(&cond_);
+}
+
+RPCThreadLocalKey::RPCThreadLocalKey(RPCThreadLocalKey::Destructor destructor)
+{
+  pthread_key_create(&key_, destructor);
+}
+
+RPCThreadLocalKey::~RPCThreadLocalKey()
+{
+  pthread_key_delete(key_);
+}
+
+void RPCThreadLocalKey::set(void *data)
+{
+  pthread_setspecific(key_, data);
+}
+
+void *RPCThreadLocalKey::doGet()
+{
+  return pthread_getspecific(key_);
 }
 
 END_MOCA_RPC_NAMESPACE

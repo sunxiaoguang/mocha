@@ -130,6 +130,8 @@ RPCDispatcherBuilder::build()
   return wrapper;
 }
 
+RPCThreadLocalKey RPCDispatcherImpl::dispatchingThreadKey_;
+
 RPCDispatcherImpl::RPCDispatcherImpl(RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData)
   : wrapper_(NULL), logger_(logger), level_(level), loggerUserData_(userData), flags_(0), numCores_(8), asyncQueue_(logger, level, userData), stopped_(false)
 {
@@ -139,14 +141,8 @@ RPCDispatcherImpl::RPCDispatcherImpl(RPCLogger logger, RPCLogLevel level, RPCOpa
 
 RPCDispatcherImpl::~RPCDispatcherImpl()
 {
-  if (flags_ & DISPATCHING_THREAD_KEY_INITIALIZED) {
-    uv_key_delete(&dispatchingThreadKey_);
-  }
   if (flags_ & EVENT_LOOP_INITIALIZED) {
     uv_loop_close(&eventLoop_);
-  }
-  if (flags_ & MUTEX_INITIALIZED) {
-    uv_mutex_destroy(&mutex_);
   }
   delete wrapper_;
 }
@@ -368,21 +364,11 @@ int32_t
 RPCDispatcherImpl::init()
 {
   int32_t st;
-  if ((st = uv_mutex_init(&mutex_))) {
-    CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
-    return st;
-  }
-  flags_ |= MUTEX_INITIALIZED;
   if ((st = uv_loop_init(&eventLoop_))) {
     CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
     return st;
   }
   flags_ |= EVENT_LOOP_INITIALIZED;
-  if ((st = uv_key_create(&dispatchingThreadKey_))) {
-    CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
-    return st;
-  }
-  flags_ |= DISPATCHING_THREAD_KEY_INITIALIZED;
   if ((st = uv_async_init(loop(), &async_, onAsyncTask))) {
     CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
     return st;
@@ -450,13 +436,13 @@ RPCDispatcherImpl::wrap()
 bool
 RPCDispatcherImpl::isDispatchingThread() const
 {
-  return uv_key_get(&dispatchingThreadKey_) != NULL;
+  return dispatchingThreadKey_.get() != NULL;
 }
 
 void
 RPCDispatcherImpl::attachDispatchingThread()
 {
-  uv_key_set(&dispatchingThreadKey_, reinterpret_cast<void *>(1));
+  dispatchingThreadKey_.set(this);
 }
 
 int32_t
@@ -469,9 +455,9 @@ int32_t
 RPCDispatcherImpl::run(uv_run_mode mode)
 {
   int32_t rc;
-  uv_key_set(&dispatchingThreadKey_, reinterpret_cast<void *>(1));
+  dispatchingThreadKey_.set(this);
   rc = unsafeRun(mode);
-  uv_key_set(&dispatchingThreadKey_, reinterpret_cast<void *>(0));
+  dispatchingThreadKey_.set(NULL);
   return rc;
 }
 

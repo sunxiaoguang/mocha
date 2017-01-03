@@ -20,7 +20,7 @@ private:
   int32_t size_;
   RPCWorker *workers_;
   RPCAtomic<int64_t> counter_;
-  uv_mutex_t mutex_;
+  RPCMutex mutex_;
   volatile bool running_;
   RPCAsyncQueue asyncQueue_;
 

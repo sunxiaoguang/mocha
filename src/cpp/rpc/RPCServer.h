@@ -35,9 +35,7 @@ private:
   };
 
   enum {
-    MUTEX_INITIALIZED = 1 << 0,
-    COND_INITIALIZED = 1 << 1,
-    TIMER_INITIALIZED = 1 << 2,
+    TIMER_INITIALIZED = 1 << 0,
   };
 
 private:
@@ -72,8 +70,8 @@ private:
   bool createEventDispatched_;
   int32_t initializedFlags_;
 
-  uv_mutex_t mutex_;
-  uv_cond_t cond_;
+  RPCMutex mutex_;
+  RPCCondVar cond_;
 
   RPCServerEventListener listener_;
   RPCOpaqueData listenerUserData_;

@@ -106,6 +106,7 @@ RPCClientChannel::init(RPCServerChannel *server)
   }
   uv_tcp_init(eventLoop_, &handle_);
   uv_tcp_nodelay(&handle_, 1);
+  uv_tcp_keepalive(&handle_, 1, keepaliveInterval_ > 1000000 ? keepaliveInterval_ / 1000000 : 120);
   handle_.data = this;
   if ((st = uv_accept(reinterpret_cast<uv_stream_t *>(server->handle()), reinterpret_cast<uv_stream_t *>(&handle_))) ||
       (st = protocol_.init(localId_, logger_, level_, loggerUserData_, 0, limit_, channelFlags_))) {

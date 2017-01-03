@@ -331,12 +331,6 @@ RPCServerImpl::~RPCServerImpl()
   if (dispatcher_) {
     dispatcher_->release();
   }
-  if (initializedFlags_ & COND_INITIALIZED) {
-    uv_cond_destroy(&cond_);
-  }
-  if (initializedFlags_ & MUTEX_INITIALIZED) {
-    uv_mutex_destroy(&mutex_);
-  }
   delete wrapper_;
 }
 
@@ -421,9 +415,9 @@ RPCServerImpl::onEvent(RPCChannel *channel, int32_t eventType, RPCOpaqueData eve
         listener_(wrapper_, channel, eventType, eventData, listenerUserData_);
       }
       if (channel_ == channel) {
-        ScopedMutex mutex(&mutex_);
+        RPCLock lock(mutex_);
         channelDestroyed_ = true;
-        uv_cond_broadcast(&cond_);
+        cond_.broadcast();
       }
       break;
     case EVENT_TYPE_CHANNEL_CREATED:
@@ -482,16 +476,6 @@ RPCServerImpl::init(RPCDispatcher *dispatcher, RPCChannel::Builder *builder, RPC
   logger_ = logger;
   level_ = loggerLevel;
   loggerUserData_ = loggerUserData;
-  if ((st = uv_mutex_init(&mutex_))) {
-    CONVERT_UV_ERROR(st, st, logger, loggerLevel, loggerUserData);
-    goto cleanupExit;
-  }
-  initializedFlags_ |= MUTEX_INITIALIZED;
-  if ((st = uv_cond_init(&cond_))) {
-    CONVERT_UV_ERROR(st, st, logger, loggerLevel, loggerUserData);
-    goto cleanupExit;
-  }
-  initializedFlags_ |= COND_INITIALIZED;
   if ((st = uv_timer_init(FriendHelper::getImpl<RPCDispatcherImpl>(dispatcher)->loop(), &timer_))) {
     CONVERT_UV_ERROR(st, st, logger, loggerLevel, loggerUserData);
     goto cleanupExit;
@@ -589,9 +573,9 @@ RPCServerImpl::shutdown()
   if (channel_) {
     channel_->close();
     channel_->release();
-    ScopedMutex mutex(&mutex_);
+    RPCLock lock(mutex_);
     while (!channelDestroyed_) {
-      uv_cond_wait(&cond_, &mutex_);
+      cond_.wait(mutex_);
     }
     channel_ = NULL;
   }

@@ -46,16 +46,14 @@ class RPCDispatcherImpl : public RPCObject, private RPCNonCopyable
 {
 private:
   enum {
-    MUTEX_INITIALIZED = 1 << 0,
-    EVENT_LOOP_INITIALIZED = 1 << 1,
-    DISPATCHING_THREAD_KEY_INITIALIZED = 1 << 2,
+    EVENT_LOOP_INITIALIZED = 1 << 0,
   };
 
 private:
   RPCDispatcher *wrapper_;
   uv_loop_t eventLoop_;
-  uv_mutex_t mutex_;
-  mutable uv_key_t dispatchingThreadKey_;
+  RPCMutex mutex_;
+  static RPCThreadLocalKey dispatchingThreadKey_;
   RPCLogger logger_;
   RPCLogLevel level_;
   RPCOpaqueData loggerUserData_;

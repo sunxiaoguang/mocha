@@ -181,38 +181,26 @@ void destroy(MocaRPCWrapper *wrapper)
 }
 
 /* TODO make this configurable */
-#define FREE_MUTEX_INITIALIZED (1)
-#define FLAGS_MUTEX_INITIALIZED (2)
-#define PENDING_MUTEX_INITIALIZED (4)
 #define RUNNING (8)
 
 RPCAsyncQueue::RPCAsyncQueue(RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData)
   : size_(0), taskPoolSize_(0), queueSize_(0), queues_(NULL), logger_(logger), level_(level), loggerUserData_(userData)
 {
-  pthread_once(&initTls_, initTls);
 }
 
-pthread_key_t RPCAsyncQueue::tlsKey_;
-pthread_once_t RPCAsyncQueue::initTls_;
+RPCThreadLocalKey RPCAsyncQueue::tlsKey_;
 
 void RPCAsyncQueue::initTls()
 {
-  pthread_key_create(&tlsKey_, NULL);
 }
 
 RPCAsyncQueue::~RPCAsyncQueue()
 {
   for (int32_t idx = 0; idx < size_; ++idx) {
     SubQueue *queue = this->queue(idx);
-    if (queue->flags & FLAGS_MUTEX_INITIALIZED) {
-      uv_mutex_destroy(&queue->flagsMutex);
-    }
-    if (queue->flags & PENDING_MUTEX_INITIALIZED) {
-      uv_mutex_destroy(&queue->pendingMutex);
-    }
-    if (queue->flags & FREE_MUTEX_INITIALIZED) {
-      uv_mutex_destroy(&queue->freeMutex);
-    }
+    queue->flagsMutex.~RPCMutex();
+    queue->pendingMutex.~RPCMutex();
+    queue->freeMutex.~RPCMutex();
   }
   free(queues_);
 }
@@ -242,27 +230,20 @@ RPCAsyncQueue::initQueue(SubQueue *queue)
   if (pipe(queue->pipe) == -1) {
     return RPC_INTERNAL_ERROR;
   }
-  /*
+#ifdef F_GETPIPE_SZ
   if ((queue->pipeSize = sizeof(AsyncTask *) * fcntl(queue->pipe[1], F_GETPIPE_SZ)) < 0) {
     return RPC_INTERNAL_ERROR;
   }
-  */
-  queue->pipeSize = 512 * 1024;
+#endif
+  if (queue->pipeSize < 512) {
+    queue->pipeSize = 512;
+  }
   queue->poll.fd = queue->pipe[0];
   queue->poll.events = POLLIN;
   queue->poll.revents = 0;
-  if (uv_mutex_init(&queue->freeMutex)) {
-    return RPC_INTERNAL_ERROR;
-  }
-  queue->flags |= FREE_MUTEX_INITIALIZED;
-  if (uv_mutex_init(&queue->flagsMutex)) {
-    return RPC_INTERNAL_ERROR;
-  }
-  queue->flags |= FLAGS_MUTEX_INITIALIZED;
-  if (uv_mutex_init(&queue->pendingMutex)) {
-    return RPC_INTERNAL_ERROR;
-  }
-  queue->flags |= PENDING_MUTEX_INITIALIZED;
+  ::new (&queue->freeMutex) RPCMutex;
+  ::new (&queue->flagsMutex) RPCMutex;
+  ::new (&queue->pendingMutex) RPCMutex;
 
   queue->freeCurrent = &queue->free;
   queue->pendingCurrent = &queue->pending;
@@ -281,20 +262,20 @@ int32_t
 RPCAsyncQueue::doDequeue(SubQueue *queue, RPCAsyncTaskSink sink, RPCOpaqueData sinkUserData, bool blocking)
 {
   AsyncTask **tasks = NULL, *head = NULL, **current = &head, *task, *next;
-  pthread_setspecific(tlsKey_, queue);
+  tlsKey_.set(queue);
   ssize_t rd;
 
 loop:
   rd = poll(&queue->poll, 1, 0);
   if (rd == 0) {
-    uv_mutex_lock(&queue->pendingMutex);
+    queue->pendingMutex.lock();
     if ((head = queue->pending) != NULL) {
       head = queue->pending;
       queue->pending = NULL;
       queue->pendingCurrent = &queue->pending;
       rd = 1;
     }
-    uv_mutex_unlock(&queue->pendingMutex);
+    queue->pendingMutex.unlock();
     if (head == NULL) {
       if (!blocking) {
         goto cleanup;
@@ -334,9 +315,9 @@ readTask:
   }
 
   if (head) {
-    uv_mutex_lock(&queue->freeMutex);
+    queue->freeMutex.lock();
     *queue->freeCurrent = head;
-    uv_mutex_unlock(&queue->freeMutex);
+    queue->freeMutex.unlock();
   }
 
   if (rd > 0) {
@@ -348,49 +329,23 @@ cleanup:
     free(tasks);
   }
 
-  pthread_setspecific(tlsKey_, NULL);
+  tlsKey_.set(NULL);
   return RPC_OK;
 }
 
 int32_t
 RPCAsyncQueue::doEnqueue(SubQueue *queue, RPCAsyncTask task, RPCOpaqueData data)
 {
-#if 0
-  AsyncTask *free;
-  if (uv_mutex_trylock(&queue->freeMutex) == UV_EBUSY) {
-allocOnHeap:
-    /* dynamic allocate on heap */
-    free = static_cast<AsyncTask *>(calloc(1, sizeof(AsyncTask)));
-  } else {
-    /* TODO check this on try path */
-    if ((queue->flags & RUNNING) == 0) {
-      uv_mutex_unlock(&queue->freeMutex);
-      return RPC_ILLEGAL_STATE;
-    }
-    if ((free = queue->free)) {
-      if (queue->freeCurrent == &free->next) {
-        queue->freeCurrent = &queue->free;
-        queue->free = NULL;
-      } else {
-        queue->free = free->next;
-      }
-    }
-    uv_mutex_unlock(&queue->freeMutex);
-    if (free == NULL) {
-      goto allocOnHeap;
-    }
-  }
-#else
   AsyncTask *free;
   SubQueue *caller;
   int32_t st;
-  uv_mutex_lock(&queue->flagsMutex);
+  queue->flagsMutex.lock();
   st = (queue->flags & RUNNING) == 0 ? RPC_ILLEGAL_STATE : RPC_OK;
-  uv_mutex_unlock(&queue->flagsMutex);
+  queue->flagsMutex.unlock();
   if (st != RPC_OK) {
     return st;
   }
-  uv_mutex_lock(&queue->freeMutex);
+  queue->freeMutex.lock();
   if ((free = queue->free)) {
     if (queue->freeCurrent == &free->next) {
       queue->freeCurrent = &queue->free;
@@ -399,26 +354,25 @@ allocOnHeap:
       queue->free = free->next;
     }
   }
-  uv_mutex_unlock(&queue->freeMutex);
+  queue->freeMutex.unlock();
   if (free == NULL) {
     /* dynamic allocate on heap */
     free = static_cast<AsyncTask *>(calloc(1, sizeof(AsyncTask)));
   }
-#endif
 
   free->task = task;
   free->data = data;
   free->next = NULL;
 
-  if ((caller = static_cast<SubQueue *>(pthread_getspecific(tlsKey_))) != NULL) {
+  if ((caller = tlsKey_.get<SubQueue>()) != NULL) {
     if (caller != queue) {
-      uv_mutex_lock(&queue->pendingMutex);
+      queue->pendingMutex.lock();
     }
     /* inside dispatching thread, put task into pending task queue */
     *queue->pendingCurrent = free;
     queue->pendingCurrent = &free->next;
     if (caller != queue) {
-      uv_mutex_unlock(&queue->pendingMutex);
+      queue->pendingMutex.unlock();
     }
   } else {
     write(queue->pipe[1], &free, sizeof(free));

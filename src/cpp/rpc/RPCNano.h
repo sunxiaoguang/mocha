@@ -27,6 +27,65 @@
 #define OFFSET_OF(TYPE, FIELD) (((size_t)(&((TYPE *) sizeof(TYPE))->FIELD)) - sizeof(TYPE))
 #define CHAINED_BUFFER_SIZE(size) MOCA_RPC_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
 
+BEGIN_MOCA_RPC_NAMESPACE
+class RPCMutex
+{
+private:
+  friend class RPCCondVar;
+private:
+  mutable pthread_mutex_t mutex_;
+public:
+  RPCMutex();
+  ~RPCMutex();
+
+  void lock() const;
+  void unlock() const;
+};
+
+class RPCCondVar
+{
+private:
+  bool initialized_;
+  mutable pthread_cond_t cond_;
+public:
+  RPCCondVar();
+  ~RPCCondVar();
+
+  void wait(const RPCMutex &mutex);
+  void broadcast();
+  void signal();
+};
+
+class RPCLock : private RPCNonCopyable
+{
+private:
+  const RPCMutex &mutex_;
+public:
+  RPCLock(const RPCMutex &mutex) : mutex_(mutex) { mutex_.lock(); }
+  ~RPCLock() { mutex_.unlock(); }
+};
+
+class RPCThreadLocalKey
+{
+private:
+  pthread_key_t key_;
+
+private:
+  void *doGet();
+public:
+  typedef void (*Destructor)(void *data);
+  RPCThreadLocalKey(Destructor destructor = NULL);
+  ~RPCThreadLocalKey();
+
+  void set(void *data);
+  void *get() { return doGet(); }
+
+  template<typename T>
+  T *get() { return static_cast<T *>(doGet()); }
+};
+
+END_MOCA_RPC_NAMESPACE
+
 #include "RPCAtomic.h"
 
 BEGIN_MOCA_RPC_NAMESPACE

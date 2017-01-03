@@ -17,7 +17,6 @@ RPCThreadPool::init(int32_t size)
   size_ = size;
   /* TODO make this configurable */
   asyncQueue_.init(size, 1024);
-  uv_mutex_init(&mutex_);
   workers_ = new RPCWorker[size_];
   for (int32_t idx = 0; idx < size_; ++idx) {
     if (MOCA_RPC_FAILED(st = initWorker(idx, worker(idx)))) {
@@ -30,7 +29,6 @@ RPCThreadPool::init(int32_t size)
 
 RPCThreadPool::~RPCThreadPool()
 {
-  uv_mutex_destroy(&mutex_);
   delete[] workers_;
 }
 
@@ -53,11 +51,8 @@ RPCThreadPool::workerEntry(void *arg)
 bool
 RPCThreadPool::isRunning()
 {
-  bool running;
-  uv_mutex_lock(&mutex_);
-  running = running_;
-  uv_mutex_unlock(&mutex_);
-  return running;
+  RPCLock lock(mutex_);
+  return running_;
 }
 
 int32_t
@@ -95,12 +90,12 @@ int32_t
 RPCThreadPool::shutdown()
 {
   bool running;
-  uv_mutex_lock(&mutex_);
+  mutex_.lock();
   running = running_;
   if (running_) {
     running_ = false;
   }
-  uv_mutex_unlock(&mutex_);
+  mutex_.unlock();
   if (!running) {
     return RPC_ILLEGAL_STATE;
   }

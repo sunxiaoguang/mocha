@@ -1,65 +1,36 @@
 #ifndef __MOCA_RPC_ATOMIC_INTERNAL_H__
 #define __MOCA_RPC_ATOMIC_INTERNAL_H__ 1
 #include "moca/rpc/RPC.h"
+#include "RPCNano.h"
 
 BEGIN_MOCA_RPC_NAMESPACE
 
-#ifdef MOCA_RPC_NANO
+#ifndef MOCA_RPC_FULL
 template<typename T>
 class RPCAtomic : private RPCNonCopyable
 {
 private:
   mutable T number_;
-  mutable pthread_mutex_t mutex_;
+  mutable RPCMutex mutex_;
 
 private:
-  void lock() const { pthread_mutex_lock(&mutex_); }
-  void unlock() const { pthread_mutex_unlock(&mutex_); }
+  void lock() const { mutex_.lock(); }
+  void unlock() const { mutex_.unlock(); }
   T addLocked(T number) const { T old = number_; number_ += number; return old; }
   T subtractLocked(T number) const { T old = number_; number_ -= number; return old; }
 
 public:
-  RPCAtomic() : number_(0) { pthread_mutex_init(&mutex_, NULL); }
-  RPCAtomic(T initValue) : number_(initValue) { pthread_mutex_init(&mutex_, NULL); }
+  RPCAtomic() : number_(0) { }
+  RPCAtomic(T initValue) : number_(initValue) { }
   T add(T number) const { lock(); T result = addLocked(number); unlock(); return result; }
   T subtract(T number) const { lock(); T result = subtractLocked(number); unlock(); return result; }
   bool compareAndSet(T &expect, const T &value) const { lock(); bool result; if (number_ == expect) { number_ = value; result = true; } else { expect = number_; result = false; } unlock(); return result; }
   bool compareAndSet(const T &expect, const T &value) const { T copy = expect; return compareAndSet(copy, value); }
   T get() const { lock(); T result = number_; unlock(); return result; }
   void set(const T &val) { lock() ; number_ = val; unlock(); }
-  ~RPCAtomic() { pthread_mutex_destroy(&mutex_); }
+  ~RPCAtomic() { }
 };
-#endif
-
-#ifdef MOCA_RPC_LITE
-#include <uv.h>
-template<typename T>
-class RPCAtomic : private RPCNonCopyable
-{
-private:
-  mutable T number_;
-  mutable uv_mutex_t mutex_;
-
-private:
-  void lock() const { uv_mutex_lock(&mutex_); }
-  void unlock() const { uv_mutex_unlock(&mutex_); }
-  T addLocked(T number) const { T old = number_; number_ += number; return old; }
-  T subtractLocked(T number) const { T old = number_; number_ -= number; return old; }
-
-public:
-  RPCAtomic() : number_(0) { uv_mutex_init(&mutex_); }
-  RPCAtomic(T initValue) : number_(initValue) { uv_mutex_init(&mutex_); }
-  T add(T number) const { lock(); T result = addLocked(number); unlock(); return result; }
-  T subtract(T number) const { lock(); T result = subtractLocked(number); unlock(); return result; }
-  bool compareAndSet(T &expect, const T &value) const { lock(); bool result; if (number_ == expect) { number_ = value; result = true; } else { expect = number_; result = false; } unlock(); return result; }
-  bool compareAndSet(const T &expect, const T &value) const { T copy = expect; return compareAndSet(copy, value); }
-  T get() const { lock(); T result = number_; unlock(); return result; }
-  void set(const T &val) { lock() ; number_ = val; unlock(); }
-  ~RPCAtomic() { uv_mutex_destroy(&mutex_); }
-};
-#endif
-
-#ifdef MOCA_RPC_FULL
+#else
 #include <atomic>
 using namespace std;
 template<typename T>

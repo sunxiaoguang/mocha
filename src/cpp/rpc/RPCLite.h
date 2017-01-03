@@ -15,22 +15,6 @@ int32_t convertUVError(int32_t st, RPCLogger logger, RPCLogLevel level, RPCOpaqu
     st = ::moca::rpc::convertUVError(uvst, logger, level, userData, __FUNCTION__, __FILE__, __LINE__);  \
   } while (false)
 
-class ScopedMutex : private RPCNonCopyable
-{
-private:
-  uv_mutex_t *mutex_;
-public:
-  ScopedMutex(uv_mutex_t *mutex) : mutex_(mutex)
-  {
-    uv_mutex_lock(mutex_);
-  }
-
-  ~ScopedMutex()
-  {
-    uv_mutex_unlock(mutex_);
-  }
-};
-
 template<typename K, typename V, typename H, typename E>
 class RPCHashMap : private RPCNonCopyable
 {
@@ -56,11 +40,10 @@ private:
   uint32_t module_;
   mutable HashTable tables_[2];
   int64_t rehashIndex_;
-  mutable uv_mutex_t mutex_;
+  mutable RPCMutex mutex_;
 private:
   void cleanup() {
     clear();
-    uv_mutex_destroy(&mutex_);
   }
   void expand(uint32_t size) {
     if (rehashing() || tables_[0].count > size) {
@@ -92,7 +75,6 @@ private:
     }
   }
   void init() {
-    uv_mutex_init(&mutex_);
     expand(1);
   }
   bool rehashing() const { return rehashIndex_ != -1; }
@@ -259,7 +241,7 @@ public:
   }
 
   void put(const K &key, const V &value) {
-    ScopedMutex mtx(&mutex_);
+    RPCLock lock(mutex_);
     if (rehashing()) {
       rehashStep();
     } else {
@@ -277,11 +259,11 @@ public:
   V *get(const K &key) { return doGet(key); }
   const V *get(const K &key) const { return doGet(key); }
   bool remove(const K &key) {
-    ScopedMutex mtx(&mutex_);
+    RPCLock lock(mutex_);
     return doDelete(key);
   }
   void visitAll(Visitor visitor, RPCOpaqueData userData) {
-    ScopedMutex mutex(&mutex_);
+    RPCLock lock(mutex_);
     doVisitAll(tables_, visitor, userData);
     if (rehashing()) {
       doVisitAll(tables_ + 1, visitor, userData);
@@ -289,11 +271,11 @@ public:
   }
 
   size_t size() const {
-    ScopedMutex mtx(&mutex_);
+    RPCLock lock(mutex_);
     return tables_[0].count + tables_[1].count;
   }
   void clear() {
-    ScopedMutex mtx(&mutex_);
+    RPCLock lock(mutex_);
     doClear(tables_);
     doClear(tables_ + 1);
     rehashIndex_ = -1;
@@ -319,7 +301,7 @@ private:
 
   struct SubQueue {
     volatile int32_t flags;
-    uv_mutex_t freeMutex;
+    RPCMutex freeMutex;
     AsyncTask *free;
     AsyncTask **freeCurrent;
     struct pollfd poll;
@@ -327,8 +309,8 @@ private:
     int32_t pipeSize;
     AsyncTask *pending;
     AsyncTask **pendingCurrent;
-    uv_mutex_t flagsMutex;
-    uv_mutex_t pendingMutex;
+    RPCMutex flagsMutex;
+    RPCMutex pendingMutex;
   };
 
 private:
@@ -340,8 +322,7 @@ private:
   RPCLogger logger_;
   RPCLogLevel level_;
   RPCOpaqueData loggerUserData_;
-  static pthread_key_t tlsKey_;
-  static pthread_once_t initTls_;
+  static RPCThreadLocalKey tlsKey_;
 
 private:
   static void initTls();
