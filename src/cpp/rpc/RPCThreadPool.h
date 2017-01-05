@@ -13,7 +13,8 @@ private:
     volatile int32_t flags;
     int32_t id;
     RPCAsyncQueue *asyncQueue;
-    uv_thread_t thread;
+    RPCThread thread;
+    RPCWorker() : thread(NULL) { }
   };
 
 private:
@@ -26,7 +27,7 @@ private:
 
 private:
   int32_t initWorker(int32_t id, RPCWorker *worker);
-  static void workerEntry(void *arg);
+  static RPCOpaqueData workerEntry(RPCOpaqueData arg);
   static void fireAsyncTask(RPCAsyncTask task, RPCOpaqueData taskUserData, RPCOpaqueData sinkUserData);
 
   inline bool isRunning();

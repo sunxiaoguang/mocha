@@ -188,10 +188,20 @@ RPCAsyncQueue::RPCAsyncQueue(RPCLogger logger, RPCLogLevel level, RPCOpaqueData 
 {
 }
 
-RPCThreadLocalKey RPCAsyncQueue::tlsKey_;
+RPCThreadLocalKey * volatile RPCAsyncQueue::tlsKey_ = NULL;
+RPCOnce RPCAsyncQueue::initTls_;
 
 void RPCAsyncQueue::initTls()
 {
+  tlsKey_ = new RPCThreadLocalKey();
+  RPC_MEMORY_BARRIER_FULL();
+}
+
+RPCThreadLocalKey *
+RPCAsyncQueue::tls()
+{
+  initTls_.run(initTls);
+  return tlsKey_;
 }
 
 RPCAsyncQueue::~RPCAsyncQueue()
@@ -262,7 +272,7 @@ int32_t
 RPCAsyncQueue::doDequeue(SubQueue *queue, RPCAsyncTaskSink sink, RPCOpaqueData sinkUserData, bool blocking)
 {
   AsyncTask **tasks = NULL, *head = NULL, **current = &head, *task, *next;
-  tlsKey_.set(queue);
+  tls()->set(queue);
   ssize_t rd;
 
 loop:
@@ -329,7 +339,7 @@ cleanup:
     free(tasks);
   }
 
-  tlsKey_.set(NULL);
+  tls()->set(NULL);
   return RPC_OK;
 }
 
@@ -364,7 +374,7 @@ RPCAsyncQueue::doEnqueue(SubQueue *queue, RPCAsyncTask task, RPCOpaqueData data)
   free->data = data;
   free->next = NULL;
 
-  if ((caller = tlsKey_.get<SubQueue>()) != NULL) {
+  if ((caller = tls()->get<SubQueue>()) != NULL) {
     if (caller != queue) {
       queue->pendingMutex.lock();
     }

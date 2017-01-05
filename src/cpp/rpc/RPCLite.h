@@ -322,10 +322,12 @@ private:
   RPCLogger logger_;
   RPCLogLevel level_;
   RPCOpaqueData loggerUserData_;
-  static RPCThreadLocalKey tlsKey_;
+  static RPCThreadLocalKey * volatile tlsKey_;
+  static RPCOnce initTls_;
 
 private:
   static void initTls();
+  static RPCThreadLocalKey *tls();
 
   SubQueue *queue(int32_t key);
   int32_t doDequeue(SubQueue *queue, RPCAsyncTaskSink sink, RPCOpaqueData sinkUserData, bool blocking);

@@ -38,14 +38,15 @@ RPCThreadPool::fireAsyncTask(RPCAsyncTask task, RPCOpaqueData taskUserData, RPCO
   task(taskUserData);
 }
 
-void
-RPCThreadPool::workerEntry(void *arg)
+RPCOpaqueData
+RPCThreadPool::workerEntry(RPCOpaqueData arg)
 {
   RPCWorker *worker = static_cast<RPCWorker *>(arg);
 
   while ((worker->flags & RUNNING) != 0) {
     worker->asyncQueue->dequeue(fireAsyncTask, NULL, worker->id, true);
   }
+  return NULL;
 }
 
 bool
@@ -79,7 +80,8 @@ RPCThreadPool::initWorker(int32_t id, RPCWorker *worker)
   worker->flags |= RUNNING;
   worker->id = id;
   worker->asyncQueue = &asyncQueue_;
-  if (uv_thread_create(&worker->thread, workerEntry, worker)) {
+  new (&worker->thread) RPCThread(workerEntry, worker);
+  if (MOCA_RPC_FAILED(worker->thread.start())) {
     return RPC_INTERNAL_ERROR;
   }
   worker->flags |= THREAD_INITIALIZED;
@@ -112,7 +114,7 @@ RPCThreadPool::shutdown()
     if ((worker->flags & THREAD_INITIALIZED) == 0) {
       continue;
     }
-    uv_thread_join(&worker->thread);
+    worker->thread.join();
   }
 
   return RPC_OK;

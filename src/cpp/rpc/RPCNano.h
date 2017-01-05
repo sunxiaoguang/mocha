@@ -27,8 +27,10 @@
 #define OFFSET_OF(TYPE, FIELD) (((size_t)(&((TYPE *) sizeof(TYPE))->FIELD)) - sizeof(TYPE))
 #define CHAINED_BUFFER_SIZE(size) MOCA_RPC_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
 
+#define RPC_MEMORY_BARRIER_FULL __sync_synchronize
+
 BEGIN_MOCA_RPC_NAMESPACE
-class RPCMutex
+class RPCMutex : private RPCNonCopyable
 {
 private:
   friend class RPCCondVar;
@@ -42,7 +44,7 @@ public:
   void unlock() const;
 };
 
-class RPCCondVar
+class RPCCondVar : private RPCNonCopyable
 {
 private:
   bool initialized_;
@@ -69,19 +71,47 @@ class RPCThreadLocalKey
 {
 private:
   pthread_key_t key_;
-
 private:
-  void *doGet();
+  RPCOpaqueData doGet();
 public:
-  typedef void (*Destructor)(void *data);
-  RPCThreadLocalKey(Destructor destructor = NULL);
+  RPCThreadLocalKey(RPCOpaqueDataDestructor destructor = NULL);
   ~RPCThreadLocalKey();
 
-  void set(void *data);
-  void *get() { return doGet(); }
+  void set(RPCOpaqueData data);
+  RPCOpaqueData get() { return doGet(); }
 
   template<typename T>
   T *get() { return static_cast<T *>(doGet()); }
+};
+
+class RPCOnce : private RPCNonCopyable
+{
+private:
+  pthread_once_t once_;
+public:
+  void run(void (*routine)());
+};
+
+class RPCThread : private RPCNonCopyable
+{
+public:
+  typedef RPCOpaqueData (*EntryPoint)(RPCOpaqueData);
+
+private:
+  pthread_t thread_;
+  volatile EntryPoint entry_;
+  RPCOpaqueData argument_;
+  bool running_;
+
+private:
+  static RPCOpaqueData run(RPCOpaqueData context);
+
+public:
+  RPCThread(EntryPoint entry, RPCOpaqueData argument = NULL);
+  ~RPCThread();
+  int32_t start();
+  int32_t join(RPCOpaqueData *result = NULL);
+  bool operator==(const RPCThread &rhs) const;
 };
 
 END_MOCA_RPC_NAMESPACE

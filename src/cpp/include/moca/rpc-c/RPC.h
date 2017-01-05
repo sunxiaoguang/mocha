@@ -7,7 +7,8 @@ extern "C" {
 #endif
 
 typedef void *MocaRPCOpaqueData;
-typedef void (*MocaRPCOpaqueDataDestructor)(MocaRPCOpaqueData opaqueData);
+typedef void (*MocaRPCOpaqueDataSink)(MocaRPCOpaqueData opaqueData);
+typedef MocaRPCOpaqueDataSink MocaRPCOpaqueDataDestructor;
 
 typedef enum MocaRPCLogLevel {
   MOCA_RPC_LOG_LEVEL_TRACE = 0,

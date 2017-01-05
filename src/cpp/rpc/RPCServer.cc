@@ -566,9 +566,11 @@ RPCServerImpl::shutdown()
     }
   }
   if (threadPool_) {
-    threadPool_->shutdown();
-    delete threadPool_;
+    RPCThreadPool *threadPool = threadPool_;
     threadPool_ = NULL;
+    RPC_MEMORY_BARRIER_FULL();
+    threadPool->shutdown();
+    delete threadPool;
   }
   if (channel_) {
     channel_->close();
@@ -652,7 +654,7 @@ RPCServerImpl::submitAsync(RPCChannel *channel, int32_t eventType, RPCOpaqueData
 {
   if (threadPool_ == NULL) {
     RPC_LOG_WARN("Thread pool is not configured, dispatch event in caller's thread");
-    eventListener(wrapper_, channel, 0, NULL, eventListenerUserData);
+    eventListener(wrapper_, channel, eventType, eventData, eventListenerUserData);
     return RPC_OK;
   }
 

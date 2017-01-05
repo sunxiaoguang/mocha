@@ -199,9 +199,11 @@ RPCCondVar::signal()
   pthread_cond_signal(&cond_);
 }
 
-RPCThreadLocalKey::RPCThreadLocalKey(RPCThreadLocalKey::Destructor destructor)
+RPCThreadLocalKey::RPCThreadLocalKey(RPCOpaqueDataDestructor destructor)
 {
-  pthread_key_create(&key_, destructor);
+  int32_t rc = pthread_key_create(&key_, destructor);
+
+  rc++;
 }
 
 RPCThreadLocalKey::~RPCThreadLocalKey()
@@ -209,14 +211,65 @@ RPCThreadLocalKey::~RPCThreadLocalKey()
   pthread_key_delete(key_);
 }
 
-void RPCThreadLocalKey::set(void *data)
+void RPCThreadLocalKey::set(RPCOpaqueData data)
 {
   pthread_setspecific(key_, data);
 }
 
-void *RPCThreadLocalKey::doGet()
+RPCOpaqueData RPCThreadLocalKey::doGet()
 {
   return pthread_getspecific(key_);
+}
+
+void RPCOnce::run(void (*routine)(void))
+{
+  pthread_once(&once_, routine);
+}
+
+RPCThread::RPCThread(RPCThread::EntryPoint entry, RPCOpaqueData argument)
+  : entry_(entry), argument_(argument), running_(false)
+{
+  memset(&thread_, 0, sizeof(thread_));
+}
+
+RPCOpaqueData
+RPCThread::run(RPCOpaqueData context)
+{
+  RPCThread *thread = static_cast<RPCThread *>(context);
+  thread->entry_(thread->argument_);
+  return NULL;
+}
+
+int32_t RPCThread::start()
+{
+  if (running_) {
+    return RPC_ILLEGAL_STATE;
+  }
+  running_ = true;
+  int32_t rc = pthread_create(&thread_, NULL, run, this);
+  return rc == 0 ? RPC_OK : RPC_INSUFFICIENT_RESOURCE;
+}
+
+int32_t RPCThread::join(RPCOpaqueData *result)
+{
+  if (!running_) {
+    return RPC_ILLEGAL_STATE;
+  }
+  RPCOpaqueData res;
+  if (result == NULL) {
+    result = &res;
+  }
+  int32_t rc = pthread_join(thread_, result);
+  return rc == 0 ? RPC_OK : RPC_ILLEGAL_STATE;
+}
+
+RPCThread::~RPCThread()
+{
+}
+
+bool RPCThread::operator==(const RPCThread &rhs) const
+{
+  return pthread_equal(thread_, rhs.thread_);
 }
 
 END_MOCA_RPC_NAMESPACE

@@ -130,13 +130,27 @@ RPCDispatcherBuilder::build()
   return wrapper;
 }
 
-RPCThreadLocalKey RPCDispatcherImpl::dispatchingThreadKey_;
+RPCThreadLocalKey * volatile RPCDispatcherImpl::dispatchingThreadKey_ = NULL;
+RPCOnce RPCDispatcherImpl::initTls_;
+
+void
+RPCDispatcherImpl::initTls()
+{
+  dispatchingThreadKey_ = new RPCThreadLocalKey();
+  RPC_MEMORY_BARRIER_FULL();
+}
+
+RPCThreadLocalKey *
+RPCDispatcherImpl::tls()
+{
+  initTls_.run(initTls);
+  return dispatchingThreadKey_;
+}
 
 RPCDispatcherImpl::RPCDispatcherImpl(RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData)
   : wrapper_(NULL), logger_(logger), level_(level), loggerUserData_(userData), flags_(0), numCores_(8), asyncQueue_(logger, level, userData), stopped_(false)
 {
   memset(&eventLoop_, 0, sizeof(eventLoop_));
-  memset(&dispatchingThreadKey_, 0, sizeof(dispatchingThreadKey_));
 }
 
 RPCDispatcherImpl::~RPCDispatcherImpl()
@@ -436,13 +450,13 @@ RPCDispatcherImpl::wrap()
 bool
 RPCDispatcherImpl::isDispatchingThread() const
 {
-  return dispatchingThreadKey_.get() != NULL;
+  return tls()->get() != NULL;
 }
 
 void
 RPCDispatcherImpl::attachDispatchingThread()
 {
-  dispatchingThreadKey_.set(this);
+  tls()->set(this);
 }
 
 int32_t
@@ -455,13 +469,13 @@ int32_t
 RPCDispatcherImpl::run(uv_run_mode mode)
 {
   int32_t rc;
-  dispatchingThreadKey_.set(this);
+  tls()->set(this);
   rc = unsafeRun(mode);
-  dispatchingThreadKey_.set(NULL);
+  tls()->set(NULL);
   return rc;
 }
 
-RPCDispatcherThreadImpl::RPCDispatcherThreadImpl() : dispatcher_(NULL), wrapper_(NULL), running_(true)
+RPCDispatcherThreadImpl::RPCDispatcherThreadImpl() : thread_(threadEntry, this), dispatcher_(NULL), wrapper_(NULL), running_(true)
 {
 }
 
@@ -470,16 +484,17 @@ RPCDispatcherThreadImpl::start(RPCDispatcher *dispatcher)
 {
   int32_t st;
   dispatcher_ = dispatcher;
-  if ((st = uv_thread_create(&thread_, threadEntry, this)) == RPC_OK) {
+  if ((st = thread_.start()) == RPC_OK) {
     dispatcher->addRef();
   }
   return st;
 }
 
-void
-RPCDispatcherThreadImpl::threadEntry(void *args)
+RPCOpaqueData
+RPCDispatcherThreadImpl::threadEntry(RPCOpaqueData argument)
 {
-  static_cast<RPCDispatcherThreadImpl *>(args)->threadEntry();
+  static_cast<RPCDispatcherThreadImpl *>(argument)->threadEntry();
+  return NULL;
 }
 
 void
@@ -530,7 +545,7 @@ RPCDispatcherThreadImpl::interrupt()
 int32_t
 RPCDispatcherThreadImpl::join()
 {
-  return uv_thread_join(&thread_);
+  return thread_.join();
 }
 
 RPCDispatcherThread *

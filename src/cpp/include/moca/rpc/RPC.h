@@ -299,6 +299,7 @@ class RPCChannelImpl;
 class RPCDispatcher;
 
 typedef MocaRPCOpaqueData RPCOpaqueData;
+typedef MocaRPCOpaqueDataSink RPCOpaqueDataSink;
 typedef MocaRPCOpaqueDataDestructor RPCOpaqueDataDestructor;
 typedef void (*RPCLogger)(RPCLogLevel level, RPCOpaqueData userData, const char *func, const char *file, uint32_t line, const char *fmt, ...);
 typedef enum MocaRPCEventType EventType;

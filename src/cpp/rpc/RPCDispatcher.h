@@ -53,7 +53,8 @@ private:
   RPCDispatcher *wrapper_;
   uv_loop_t eventLoop_;
   RPCMutex mutex_;
-  static RPCThreadLocalKey dispatchingThreadKey_;
+  static RPCThreadLocalKey * volatile dispatchingThreadKey_;
+  static RPCOnce initTls_;
   RPCLogger logger_;
   RPCLogLevel level_;
   RPCOpaqueData loggerUserData_;
@@ -84,6 +85,8 @@ private:
   static void onAsyncTimerDestroy(RPCOpaqueData data);
   void onAsyncTimerDestroy(RPCDispatcherTimer *timer);
   static void onTimerEvent(uv_timer_t *handle);
+  static void initTls();
+  static RPCThreadLocalKey *tls();
 
 public:
   RPCDispatcherImpl(RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData);
@@ -129,13 +132,13 @@ public:
 class RPCDispatcherThreadImpl : public RPCObject, private RPCNonCopyable
 {
 private:
-  uv_thread_t thread_;
+  RPCThread thread_;
   RPCDispatcher *dispatcher_;
   RPCDispatcherThread *wrapper_;
   RPCAtomic<bool> running_;
 
 private:
-  static void threadEntry(void *args);
+  static RPCOpaqueData threadEntry(RPCOpaqueData argument);
 
   void threadEntry();
 
