@@ -612,8 +612,9 @@ RPCProtocol::processErrorHook(int32_t status) const
 RPCProtocol::RPCProtocol(RPCOpaqueData channel, ShutdownChannel shutdown,
     EventListener listener, RPCOpaqueData listenerUserData,
     WriteDataSink writeSink, RPCOpaqueData writeSinkUserData,
-    size_t writeOpaqueDataSize, size_t writeBufferAlignment)
-  : channel_(channel), shutdown_(shutdown), state_(STATE_NEGOTIATION_MAGIC), channelFlags_(0),
+    size_t writeOpaqueDataSize, size_t writeBufferAlignment,
+    int32_t state)
+  : channel_(channel), shutdown_(shutdown), state_(state), channelFlags_(0),
   writeBuffer_(NULL), readBuffer_(NULL), nextBuffer_(&readBuffer_), readAvailable_(0), readBufferOffset_(0), readPending_(4),
   swapByteOrder_(false), remoteVersion_(0), remoteFlags_(0), remoteIdSize_(0),
   localVersion_(0), localFlags_(0), packetId_(0),
@@ -655,7 +656,7 @@ RPCProtocol::init(const StringLite &id, RPCLogger logger, RPCLogLevel level, RPC
   level_ = level;
   limit_ = limit;
   loggerUserData_ = loggerUserData;
-  localFlags_ = (flags & 0xFFFFFF) | NEGOTIATION_FLAG_ACCEPT_ZLIB;
+  localFlags_ = (flags & NEGOTIATION_FLAG_MASK) | NEGOTIATION_FLAG_ACCEPT_ZLIB;
   channelFlags_ = channelFlags;
   int32_t rc;
   localId_ = id;

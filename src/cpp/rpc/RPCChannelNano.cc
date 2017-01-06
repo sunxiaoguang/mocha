@@ -516,7 +516,7 @@ RPCChannelNanoImpl::setRunning(bool running)
 }
 
 int32_t
-RPCChannelNanoImpl::init(const StringLite &id, int64_t timeout, int64_t keepalive, int32_t flags, int32_t limit)
+RPCChannelNanoImpl::init(const StringLite &id, int64_t timeout, int64_t keepalive, int32_t channelFlags, int32_t limit, int32_t protocolFlags)
 {
   int32_t rc;
   timeout_ = timeout < SECOND / 1000 ? SECOND / 1000 : timeout;
@@ -533,7 +533,7 @@ RPCChannelNanoImpl::init(const StringLite &id, int64_t timeout, int64_t keepaliv
   }
   fdset_[0].fd = pipe_[0];
   fdset_[0].events = POLLIN;
-  if (MOCA_RPC_FAILED(rc = protocol_.init(id, logger_, level_, loggerUserData_, 0, limit, flags))) {
+  if (MOCA_RPC_FAILED(rc = protocol_.init(id, logger_, level_, loggerUserData_, protocolFlags, limit, channelFlags))) {
     RPC_LOG_ERROR("Could not initialize rpc protocol. %d", rc);
     return rc;
   }
@@ -759,13 +759,13 @@ RPCChannelNano *
 RPCChannelNanoImpl::create(const StringLite &address, const StringLite &id, int64_t timeout, int64_t keepalive,
     int32_t flags, int32_t limit, RPCLogger logger, RPCLogLevel level, RPCOpaqueData loggerUserData,
     RPCChannelNano::EventListener listener, RPCOpaqueData userData, int32_t eventMask,
-    RPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor)
+    RPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor, int32_t protocolFlags)
 {
   RPCChannelNanoImpl* impl = new RPCChannelNanoImpl(logger, level, loggerUserData,
       listener, userData, eventMask, attachment, attachmentDestructor);
   RPCChannelNano *channel = impl->wrap();
   int32_t st;
-  MOCA_RPC_DO_GOTO(st, impl->init(id, timeout, keepalive, flags, limit), cleanupExit);
+  MOCA_RPC_DO_GOTO(st, impl->init(id, timeout, keepalive, flags, limit, protocolFlags), cleanupExit);
   MOCA_RPC_DO_GOTO(st, impl->connect(address.str()), cleanupExit);
   return channel;
 cleanupExit:
@@ -988,7 +988,7 @@ RPCChannelNano *
 RPCChannelNanoBuilder::build()
 {
   RPCChannelNano *channel = RPCChannelNanoImpl::create(address_, id_, timeout_, keepaliveInterval_, flags_, limit_,
-      logger_, level_, loggerUserData_, listener_, listenerUserData_, listenerMask_, attachment_, attachmentDestructor_);
+      logger_, level_, loggerUserData_, listener_, listenerUserData_, listenerMask_, attachment_, attachmentDestructor_, 0);
   if (channel) {
     attachment_ = NULL;
     attachmentDestructor_ = NULL;

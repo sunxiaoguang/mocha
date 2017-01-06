@@ -7,6 +7,12 @@
 extern "C" {
 #endif
 
+typedef enum MocaRPCProtocolFlags {
+  MOCA_RPC_PROTOCOL_NEGOTIATION_FLAG_ACCEPT_ZLIB = 1 << 0,
+  MOCA_RPC_PROTOCOL_NEGOTIATION_FLAG_NO_HINT = 1 << 1,
+  MOCA_RPC_PROTOCOL_NEGOTIATION_FLAG_MASK = 0xFFFF,
+} MocaRPCProtocolFlags;
+
 typedef struct MocaRPCProtocol MocaRPCProtocol;
 
 typedef void (*MocaRPCProtocolWrite)(MocaRPCOpaqueData buffer, size_t size, MocaRPCOpaqueData userData);
@@ -14,6 +20,7 @@ typedef void (*MocaRPCProtocolListener)(int32_t eventType, MocaRPCOpaqueData eve
 typedef void (*MocaRPCProtocolShutdown)(MocaRPCOpaqueData userData);
 
 MocaRPCProtocol *MocaRPCProtocolCreate(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData);
+MocaRPCProtocol *MocaRPCProtocolCreateNegotiated(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData);
 int32_t MocaRPCProtocolRead(MocaRPCProtocol *protocol, MocaRPCOpaqueData data, int32_t size);
 int32_t MocaRPCProtocolStart(MocaRPCProtocol *protocol, const char *id, MocaRPCLogger logger, MocaRPCLogLevel level, MocaRPCOpaqueData loggerUserData, int32_t flags, int32_t limit, int32_t channelFlags);
 int32_t MocaRPCProtocolKeepAlive(MocaRPCProtocol *protocol);

@@ -57,6 +57,7 @@ private:
     HINT_CODE_KEEPALIVE = 0,
   };
 
+public:
   enum {
     STATE_NEGOTIATION_MAGIC, /* 0 */
     STATE_NEGOTIATION_FLAGS, /* 1 */
@@ -126,7 +127,6 @@ private:
   int32_t initBuffer();
 
   void setState(int32_t state) { int32_t oldState; oldState = state_; state_ = state; RPC_LOG_TRACE("Change state from %d to %d", oldState, state);}
-  int32_t getState() const { return state_; }
 
   static void readToBufferSink(void *data, size_t size, void *userData);
   static void readToStringSink(void *data, size_t size, void *userData);
@@ -219,7 +219,7 @@ private:
 
 public:
   RPCProtocol(RPCOpaqueData channel, ShutdownChannel shutdown, EventListener listener, RPCOpaqueData listenerUserData, WriteDataSink writeSink,
-      RPCOpaqueData writeSinkUserData, size_t writeOpaqueDataSize, size_t writeBufferAlignment);
+      RPCOpaqueData writeSinkUserData, size_t writeOpaqueDataSize, size_t writeBufferAlignment, int32_t state = STATE_NEGOTIATION_MAGIC);
   ~RPCProtocol();
 
   void onRead(size_t size);
@@ -263,6 +263,7 @@ public:
 
   const StringLite &localId() const { return localId_; }
   const StringLite &remoteId() const { return remoteId_; }
+  int32_t getState() const { return state_; }
 };
 
 END_MOCA_RPC_NAMESPACE

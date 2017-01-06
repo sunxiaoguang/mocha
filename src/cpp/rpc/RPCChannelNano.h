@@ -119,18 +119,12 @@ private:
   }
 
 public:
-  enum {
-    NEGOTIATION_FLAG_ACCEPT_ZLIB = 1 << 0,
-    NEGOTIATION_FLAG_NO_HINT = 1 << 23,
-  };
-
-public:
   RPCChannelNanoImpl(RPCLogger logger, RPCLogLevel level, RPCOpaqueData loggerUserData,
       RPCChannelNano::EventListener listener, RPCOpaqueData listenerUserData, int32_t eventMask,
       RPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor);
   virtual ~RPCChannelNanoImpl();
 
-  int32_t init(const StringLite &id, int64_t timeout, int64_t keepalive, int32_t flags, int32_t limit);
+  int32_t init(const StringLite &id, int64_t timeout, int64_t keepalive, int32_t channelFlags, int32_t limit, int32_t protocolFlags);
   int32_t connect(const char *address);
   int32_t loop(int32_t flags);
   int32_t breakLoop() const;
@@ -155,9 +149,9 @@ public:
   int32_t remoteId(StringLite *remoteId) const;
   int32_t checkAndSendPendingPackets();
 
-  static RPCChannelNano *create(const StringLite &address, const StringLite &id, int64_t timeout, int64_t keepalive, int32_t flags,
+  static RPCChannelNano *create(const StringLite &address, const StringLite &id, int64_t timeout, int64_t keepalive, int32_t channelFlags,
       int32_t limit, RPCLogger logger, RPCLogLevel level, RPCOpaqueData loggerUserData, RPCChannelNano::EventListener listener,
-      RPCOpaqueData userData, int32_t eventMask, RPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor);
+      RPCOpaqueData userData, int32_t eventMask, RPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor, int32_t protocolFlags);
 
   RPCChannelNano *wrap() {
     wrapper_ = new RPCChannelNano(this);

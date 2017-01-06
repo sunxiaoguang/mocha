@@ -12,7 +12,7 @@ struct MocaRPCProtocol : MocaRPCWrapper
   MocaRPCProtocolWrite write;
   MocaRPCOpaqueData userData;
   MocaRPCPacketEventData packet;
-  MocaRPCProtocol(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData);
+  MocaRPCProtocol(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData, int32_t state);
   ~MocaRPCProtocol();
   static void writeDataSink(ChainedBuffer **buffer, void *argument);
   static void eventListener(int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData);
@@ -61,8 +61,8 @@ MocaRPCOpaqueData MocaRPCProtocolUserData(MocaRPCProtocol *protocol)
   return protocol->userData;
 }
 
-MocaRPCProtocol::MocaRPCProtocol(MocaRPCProtocolShutdown shutdown1, MocaRPCProtocolListener listener1, MocaRPCProtocolWrite write1, MocaRPCOpaqueData userData1)
-  : protocol(this, shutdownChannel, eventListener, this, writeDataSink, this, 0, 8), shutdown(shutdown1), listener(listener1), write(write1), userData(userData1)
+MocaRPCProtocol::MocaRPCProtocol(MocaRPCProtocolShutdown shutdown1, MocaRPCProtocolListener listener1, MocaRPCProtocolWrite write1, MocaRPCOpaqueData userData1, int32_t state)
+  : protocol(this, shutdownChannel, eventListener, this, writeDataSink, this, 0, 8, state), shutdown(shutdown1), listener(listener1), write(write1), userData(userData1)
 {
   refcount = 1;
   headers = NULL;
@@ -78,7 +78,12 @@ MocaRPCProtocol::~MocaRPCProtocol()
 
 MocaRPCProtocol *MocaRPCProtocolCreate(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData)
 {
-  return new MocaRPCProtocol(shutdown, listener, write, userData);
+  return new MocaRPCProtocol(shutdown, listener, write, userData, RPCProtocol::STATE_NEGOTIATION_MAGIC);
+}
+
+MocaRPCProtocol *MocaRPCProtocolCreateNegotiated(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData)
+{
+  return new MocaRPCProtocol(shutdown, listener, write, userData, RPCProtocol::STATE_PACKET_ID);
 }
 
 int32_t MocaRPCProtocolRead(MocaRPCProtocol *protocol, MocaRPCOpaqueData data, int32_t size)
