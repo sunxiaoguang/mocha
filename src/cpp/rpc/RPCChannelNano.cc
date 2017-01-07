@@ -607,6 +607,7 @@ RPCChannelNanoImpl::loop(int32_t flags)
   int64_t timeout = (flags & RPCChannelNano::LOOP_FLAG_NONBLOCK) ? 0 : timeout_;
   int64_t interval = timeout < keepalive_ ? timeout_ : keepalive_;
   int32_t realTimeout = interval == INT64_MAX ? INT32_MAX : interval / 1000;
+  bool keepaliveEnabled = true;
   timeval start = {0, 0};
   bool hasRead = false;
   if (running_) {
@@ -659,8 +660,11 @@ RPCChannelNanoImpl::loop(int32_t flags)
         gettimeofday(&now, NULL);
         if ((now.tv_sec - start.tv_sec) * 1000000L + (now.tv_usec - start.tv_usec) > timeout_) {
           st = RPC_TIMEOUT;
-        } else if (protocol_.isEstablished()) {
-          st = keepalive();
+        } else if (protocol_.isEstablished() && keepaliveEnabled) {
+          if ((st = keepalive()) == RPC_CANCELED) {
+            keepaliveEnabled = false;
+            st = RPC_OK;
+          }
         }
       }
     } else {
