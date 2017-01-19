@@ -27,6 +27,7 @@ int32_t MocaRPCProtocolKeepAlive(MocaRPCProtocol *protocol);
 int32_t MocaRPCProtocolResponse(MocaRPCProtocol *protocol, int64_t id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize);
 int32_t MocaRPCProtocolRequest(MocaRPCProtocol *protocol, int64_t *id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize);
 int32_t MocaRPCProtocolRequest2(MocaRPCProtocol *protocol, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize);
+int32_t MocaRPCProtocolRequest3(MocaRPCProtocol *protocol, int64_t id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize);
 int32_t MocaRPCProtocolSendNegotiation(MocaRPCProtocol *protocol);
 int32_t MocaRPCProtocolIsEstablished(MocaRPCProtocol *protocol);
 int32_t MocaRPCProtocolProcessError(MocaRPCProtocol *protocol, int32_t status);

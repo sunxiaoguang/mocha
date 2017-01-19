@@ -41,21 +41,26 @@ public:
     POLL_WRITABLE = 1 << 1,
     POLL_READWRITE = POLL_READABLE | POLL_WRITABLE,
     POLL_DISCONNECT = 1 << 2,
+    POLL_ERROR = 1 << 3,
     POLL_DESTROYED = 1 << 30,
   };
   enum TimerFlags {
     TIMER_FLAG_ONE_SHOT = 0,
     TIMER_FLAG_REPEAT = 1 << 0,
   };
+  enum TimerEvents {
+    TIMER_FIRED = 1 << 0,
+    TIMER_ERROR = 1 << 1,
+    TIMER_DESTROYED = 1 << 30,
+  };
 
   typedef struct Poll Poll;
   typedef int32_t Pollable;
-  typedef void (*PollEventListener)(Poll *poll, Pollable pollable, int32_t status, int32_t events, RPCOpaqueData userData);
+  typedef void (*PollEventListener)(RPCDispatcher* dispatcher, Poll *poll, Pollable pollable, int32_t status, int32_t events, RPCOpaqueData userData);
 
   typedef struct Timer Timer;
-  typedef void (*TimerEventListener)(Timer *timer, RPCOpaqueData userData);
+  typedef void (*TimerEventListener)(RPCDispatcher* dispatcher, Timer *timer, int32_t event, RPCOpaqueData userData);
 
-public:
   class Builder : private RPCNonCopyable
   {
   private:
@@ -70,6 +75,9 @@ public:
     RPCDispatcher *build();
   };
 
+  typedef void (*AsyncTask)(RPCDispatcher *dispatcher, RPCOpaqueData data);
+public:
+
   static Builder *newBuilder();
 
   int32_t stop();
@@ -78,12 +86,14 @@ public:
   void addRef();
   bool release();
 
-  int32_t createPoll(Poll **poll, Pollable pollable, int32_t events, PollEventListener listener, RPCOpaqueData userData = NULL);
-  int32_t updatePoll(Poll *poll, int32_t events);
-  int32_t destroyPoll(Poll *poll);
+  int32_t create(Poll **poll, Pollable pollable, int32_t events, PollEventListener listener, RPCOpaqueData userData = NULL);
+  int32_t update(Poll *poll, int32_t events);
+  int32_t destroy(Poll *poll);
 
-  int32_t createTimer(Timer **timer, int32_t flags, int64_t timeout, TimerEventListener listener, RPCOpaqueData userData = NULL);
-  int32_t destroyTimer(Timer *timer);
+  int32_t create(Timer **timer, int32_t flags, int64_t timeout, TimerEventListener listener, RPCOpaqueData userData = NULL);
+  int32_t destroy(Timer *timer);
+
+  int32_t submitAsync(AsyncTask task, RPCOpaqueData userData);
 
   bool isDispatchingThread() const;
 };

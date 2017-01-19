@@ -67,8 +67,29 @@ RPCDispatcher::release()
   return impl_->release();
 }
 
+static void asyncTaskEntry(RPCOpaqueData userData)
+{
+  RPCDispatcherAsyncTask *asyncTask = static_cast<RPCDispatcherAsyncTask *>(userData);
+  asyncTask->task(asyncTask->dispatcher, asyncTask->userData);
+  free(asyncTask);
+}
+
 int32_t
-RPCDispatcher::createPoll(RPCDispatcher::Poll **poll, RPCDispatcher::Pollable pollable, int32_t events, RPCDispatcher::PollEventListener listener, RPCOpaqueData userData)
+RPCDispatcher::submitAsync(AsyncTask task, RPCOpaqueData userData)
+{
+  RPCDispatcherAsyncTask *asyncTask = static_cast<RPCDispatcherAsyncTask *>(malloc(sizeof(RPCDispatcherAsyncTask)));
+  asyncTask->task = task;
+  asyncTask->userData = userData;
+  asyncTask->dispatcher = this;
+  int32_t st = impl_->submitAsync(asyncTaskEntry, asyncTask);
+  if (MOCA_RPC_FAILED(st)) {
+    free(asyncTask);
+  }
+  return st;
+}
+
+int32_t
+RPCDispatcher::create(RPCDispatcher::Poll **poll, RPCDispatcher::Pollable pollable, int32_t events, RPCDispatcher::PollEventListener listener, RPCOpaqueData userData)
 {
   RPCDispatcherPoll *newPoll = NULL;
   int32_t st = impl_->createPoll(&newPoll, pollable, events, listener, userData);
@@ -76,18 +97,18 @@ RPCDispatcher::createPoll(RPCDispatcher::Poll **poll, RPCDispatcher::Pollable po
   return st;
 }
 int32_t
-RPCDispatcher::updatePoll(RPCDispatcher::Poll *poll, int32_t events)
+RPCDispatcher::update(RPCDispatcher::Poll *poll, int32_t events)
 {
   return impl_->updatePoll(reinterpret_cast<RPCDispatcherPoll *>(poll), events);
 }
 int32_t
-RPCDispatcher::destroyPoll(Poll *poll)
+RPCDispatcher::destroy(Poll *poll)
 {
   return impl_->destroyPoll(reinterpret_cast<RPCDispatcherPoll *>(poll));
 }
 
 int32_t
-RPCDispatcher::createTimer(Timer **timer, int32_t flags, int64_t timeout, TimerEventListener listener, RPCOpaqueData userData)
+RPCDispatcher::create(Timer **timer, int32_t flags, int64_t timeout, TimerEventListener listener, RPCOpaqueData userData)
 {
   RPCDispatcherTimer *newTimer = NULL;
   int32_t st = impl_->createTimer(&newTimer, flags, timeout, listener, userData);
@@ -95,7 +116,7 @@ RPCDispatcher::createTimer(Timer **timer, int32_t flags, int64_t timeout, TimerE
   return st;
 }
 int32_t
-RPCDispatcher::destroyTimer(Timer *timer)
+RPCDispatcher::destroy(Timer *timer)
 {
   return impl_->destroyTimer(reinterpret_cast<RPCDispatcherTimer *>(timer));
 }
@@ -199,7 +220,7 @@ void
 RPCDispatcherImpl::onPollEvent(uv_poll_t *handle, int32_t status, int32_t events)
 {
   RPCDispatcherPoll *poll = static_cast<RPCDispatcherPoll *>(handle->data);
-  poll->listener(reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable, status, events, poll->userData);
+  poll->listener(poll->dispatcher->wrapper_, reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable, status, events, poll->userData);
 }
 
 void
@@ -220,8 +241,9 @@ RPCDispatcherImpl::onAsyncPollStart(RPCDispatcherPoll *poll)
 
 cleanupExit:
   CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
-  poll->listener(reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable,
-      st, RPCDispatcher::POLL_READABLE, poll->userData);
+  poll->listener(wrapper_, reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable,
+      st, RPCDispatcher::POLL_ERROR | RPCDispatcher::POLL_DESTROYED, poll->userData);
+  free(poll);
   return;
 }
 
@@ -268,14 +290,20 @@ RPCDispatcherImpl::onAsyncPollDestroy(RPCDispatcherPoll *poll)
   int32_t st;
   if ((st = uv_poll_stop(&poll->handle))) {
     CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
-    poll->listener(reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable,
-        st, RPCDispatcher::POLL_READABLE, poll->userData);
-  } else {
-    poll->listener(reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable,
-        st, RPCDispatcher::POLL_DESTROYED, poll->userData);
-    free(poll);
+    poll->listener(wrapper_, reinterpret_cast<RPCDispatcher::Poll *>(poll), poll->pollable,
+      st, RPCDispatcher::POLL_ERROR, poll->userData);
   }
+  uv_close(reinterpret_cast<uv_handle_t *>(&poll->handle), onPollCollect);
   return;
+}
+
+void
+RPCDispatcherImpl::onPollCollect(uv_handle_t *handle)
+{
+  RPCDispatcherPoll *poll = static_cast<RPCDispatcherPoll *>(handle->data);
+  poll->listener(poll->dispatcher->wrapper_, reinterpret_cast<RPCDispatcher::Poll *>(poll),
+      0, RPC_OK, RPCDispatcher::POLL_DESTROYED, poll->userData);
+  free(poll);
 }
 
 void
@@ -296,7 +324,7 @@ void
 RPCDispatcherImpl::onTimerEvent(uv_timer_t *handle)
 {
   RPCDispatcherTimer *timer = static_cast<RPCDispatcherTimer *>(handle->data);
-  timer->listener(reinterpret_cast<RPCDispatcher::Timer *>(timer), timer->userData);
+  timer->listener(timer->dispatcher->wrapper_, reinterpret_cast<RPCDispatcher::Timer *>(timer), RPCDispatcher::TIMER_FIRED, timer->userData);
 }
 
 void
@@ -307,14 +335,16 @@ RPCDispatcherImpl::onAsyncTimerCreate(RPCDispatcherTimer *timer)
     goto cleanupExit;
   }
   timer->handle.data = timer;
-  if ((st = uv_timer_start(&timer->handle, onTimerEvent, timer->timeout, timer->repeat))) {
+  if ((st = uv_timer_start(&timer->handle, onTimerEvent, timer->timeout / 1000, timer->repeat / 1000))) {
     goto cleanupExit;
   }
   return;
 
 cleanupExit:
   CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
-  timer->listener(reinterpret_cast<RPCDispatcher::Timer *>(timer), timer->userData);
+  timer->listener(wrapper_, reinterpret_cast<RPCDispatcher::Timer *>(timer),
+      RPCDispatcher::TIMER_ERROR | RPCDispatcher::TIMER_DESTROYED, timer->userData);
+  free(timer);
   return;
 }
 
@@ -326,16 +356,24 @@ RPCDispatcherImpl::onAsyncTimerCreate(RPCOpaqueData data)
 }
 
 void
+RPCDispatcherImpl::onTimerCollect(uv_handle_t *handle)
+{
+  RPCDispatcherTimer *timer = static_cast<RPCDispatcherTimer *>(handle->data);
+  timer->listener(timer->dispatcher->wrapper_, reinterpret_cast<RPCDispatcher::Timer *>(timer),
+      RPCDispatcher::TIMER_DESTROYED, timer->userData);
+  free(timer);
+}
+
+void
 RPCDispatcherImpl::onAsyncTimerDestroy(RPCDispatcherTimer *timer)
 {
   int32_t st;
   if ((st = uv_timer_stop(&timer->handle))) {
     CONVERT_UV_ERROR(st, st, logger_, level_, loggerUserData_);
-    timer->listener(reinterpret_cast<RPCDispatcher::Timer *>(timer), timer->userData);
-  } else {
-    timer->listener(reinterpret_cast<RPCDispatcher::Timer *>(timer), timer->userData);
-    free(timer);
+    timer->listener(wrapper_, reinterpret_cast<RPCDispatcher::Timer *>(timer),
+      RPCDispatcher::TIMER_ERROR, timer->userData);
   }
+  uv_close(reinterpret_cast<uv_handle_t *>(&timer->handle), onTimerCollect);
   return;
 }
 

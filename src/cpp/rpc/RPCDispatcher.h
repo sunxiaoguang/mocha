@@ -42,6 +42,13 @@ struct RPCDispatcherTimer
   RPCDispatcherImpl *dispatcher;
 };
 
+struct RPCDispatcherAsyncTask
+{
+  RPCDispatcher::AsyncTask task;
+  RPCOpaqueData userData;
+  RPCDispatcher *dispatcher;
+};
+
 class RPCDispatcherImpl : public RPCObject, private RPCNonCopyable
 {
 private:
@@ -74,12 +81,14 @@ private:
   void onAsyncTask();
   static void fireAsyncTask(RPCAsyncTask task, RPCOpaqueData taskUserData, RPCOpaqueData sinkUserData);
 
+  static void onPollCollect(uv_handle_t *handle);
   static void onAsyncPollStart(RPCOpaqueData data);
   void onAsyncPollStart(RPCDispatcherPoll *poll);
   static void onAsyncPollDestroy(RPCOpaqueData data);
   void onAsyncPollDestroy(RPCDispatcherPoll *poll);
   static void onPollEvent(uv_poll_t *handle, int32_t status, int32_t events);
 
+  static void onTimerCollect(uv_handle_t *handle);
   static void onAsyncTimerCreate(RPCOpaqueData data);
   void onAsyncTimerCreate(RPCDispatcherTimer *timer);
   static void onAsyncTimerDestroy(RPCOpaqueData data);

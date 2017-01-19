@@ -128,6 +128,17 @@ int32_t MocaRPCProtocolResponse(MocaRPCProtocol *protocol, int64_t id, int32_t c
 
 int32_t MocaRPCProtocolRequest(MocaRPCProtocol *protocol, int64_t *id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
+  return MocaRPCProtocolRequest3(protocol, (*id = protocol->protocol.nextRequestId()), code, headers, payload, payloadSize);
+}
+
+int32_t MocaRPCProtocolRequest2(MocaRPCProtocol *protocol, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+{
+  int64_t ignored;
+  return MocaRPCProtocolRequest(protocol, &ignored, code, headers, payload, payloadSize);
+}
+
+int32_t MocaRPCProtocolRequest3(MocaRPCProtocol *protocol, int64_t id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+{
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmpHeaders;
     convert(headers, &tmpHeaders);
@@ -135,12 +146,6 @@ int32_t MocaRPCProtocolRequest(MocaRPCProtocol *protocol, int64_t *id, int32_t c
   } else {
     return protocol->protocol.request(id, code, static_cast<const KeyValuePairs<StringLite, StringLite> *>(NULL), payload, payloadSize);
   }
-}
-
-int32_t MocaRPCProtocolRequest2(MocaRPCProtocol *protocol, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
-{
-  int64_t ignored;
-  return MocaRPCProtocolRequest(protocol, &ignored, code, headers, payload, payloadSize);
 }
 
 int32_t MocaRPCProtocolSendNegotiation(MocaRPCProtocol *protocol)

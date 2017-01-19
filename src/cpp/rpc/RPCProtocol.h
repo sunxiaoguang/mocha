@@ -205,10 +205,6 @@ private:
     return isFlagsSet(RPCChannel::CHANNEL_FLAG_BUFFERED_PAYLOAD);
   }
 
-  int64_t nextRequestId() const {
-    return currentId_.add(1);
-  }
-
   bool isRemoteHintDisabled() const {
     return (remoteFlags_ & NEGOTIATION_FLAG_NO_HINT) != 0;
   }
@@ -243,11 +239,14 @@ public:
     return doSendPacket(id, code, PACKET_TYPE_RESPONSE, headers, payload, payloadSize);
   }
 
-  int32_t request(int64_t *id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize)
+  int32_t request(int64_t id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize)
   {
-    *id = nextRequestId();
-    RPC_LOG_DEBUG("Send request %lld with code %d", static_cast<long long>(*id), code);
-    return doSendPacket(*id, code, PACKET_TYPE_REQUEST, headers, payload, payloadSize);
+    RPC_LOG_DEBUG("Send request %lld with code %d", static_cast<long long>(id), code);
+    return doSendPacket(id, code, PACKET_TYPE_REQUEST, headers, payload, payloadSize);
+  }
+
+  int64_t nextRequestId() const {
+    return currentId_.add(1);
   }
 
   int32_t sendNegotiation();

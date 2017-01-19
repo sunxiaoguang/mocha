@@ -81,6 +81,13 @@ void eventListener(RPCChannel *channel, int32_t eventType, RPCOpaqueData eventDa
   }
 }
 
+void testTimer(RPCDispatcher *dispatcher, RPCDispatcher::Timer *timer, int32_t events, RPCOpaqueData userData)
+{
+  if (events == RPCDispatcher::TIMER_FIRED) {
+    dispatcher->destroy(timer);
+  }
+}
+
 int main(int argc, const char **argv)
 {
   signal(SIGPIPE, SIG_IGN);
@@ -93,6 +100,9 @@ int main(int argc, const char **argv)
   auto channel = builder->bind(argv[1])->listener(eventListener, NULL, 0xFFFFFFFF)->dispatcher(dispatcher)->flags(RPCChannel::CHANNEL_FLAG_BLOCKING)->build();
   delete builder;
   int32_t sleepTime = 60;
+  RPCDispatcher::Timer *timer;
+
+  dispatcher->create(&timer, 0, 1000000, testTimer);
 
   if (argc > 2) {
     sleepTime = strtoll(argv[2], NULL, 10);

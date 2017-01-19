@@ -67,6 +67,7 @@ public:
     int64_t discarded;
     return request(&discarded, code, headers, payload, payloadSize);
   }
+  int32_t request(int64_t id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;
 
   void attachment(RPCOpaqueData attachment, RPCOpaqueDataDestructor destructor);
   RPCOpaqueData attachment() const;
@@ -85,6 +86,7 @@ public:
   int32_t remoteId(string *remoteId) const;
   int32_t response(int64_t id, int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;
   int32_t request(int64_t *id, int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;
+  int32_t request(int64_t id, int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;
   int32_t request(int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const
   {
     int64_t discarded;

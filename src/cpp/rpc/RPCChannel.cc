@@ -541,6 +541,7 @@ RPCChannelImpl::processErrorHook(int32_t status) const
       break;
     default:
       fireErrorEvent(status, NULL);
+      break;
   }
   return status;
 }
@@ -644,6 +645,13 @@ RPCChannel::response(int64_t id, int32_t code, const KeyValuePairs<StringLite, S
 }
 
 int32_t
+RPCChannel::request(int64_t id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize) const
+{
+  RPCClientChannel *client = static_cast<RPCClientChannel *>(impl_);
+  return client->request(id, code, headers, payload, payloadSize);
+}
+
+int32_t
 RPCChannel::request(int64_t *id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize) const
 {
   RPCClientChannel *client = static_cast<RPCClientChannel *>(impl_);
@@ -680,6 +688,19 @@ RPCChannel::response(int64_t id, int32_t code, const KeyValueMap *headers, const
 
 int32_t
 RPCChannel::request(int64_t *id, int32_t code, const KeyValueMap *headers, const void *payload, size_t payloadSize) const
+{
+  RPCClientChannel *client = static_cast<RPCClientChannel *>(impl_);
+  if (headers) {
+    KeyValuePairs<StringLite, StringLite> tmpHeaders;
+    convert(headers, &tmpHeaders);
+    return client->request(id, code, &tmpHeaders, payload, payloadSize);
+  } else {
+    return client->request(id, code, NULL, payload, payloadSize);
+  }
+}
+
+int32_t
+RPCChannel::request(int64_t id, int32_t code, const KeyValueMap *headers, const void *payload, size_t payloadSize) const
 {
   RPCClientChannel *client = static_cast<RPCClientChannel *>(impl_);
   if (headers) {

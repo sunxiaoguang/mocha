@@ -118,7 +118,7 @@ int32_t convertUVError(int32_t uvst, RPCLogger logger, RPCLogLevel level, RPCOpa
       break;
   }
 
-  //LOGGER_ERROR_AT(logger, level, userData, func, file, line, "libuv error %d:%s => %d:%s", uvst, uv_strerror(uvst), st, errorString(st));
+  LOGGER_ERROR_AT(logger, level, userData, func, file, line, "libuv error %d:%s => %d:%s", uvst, uv_strerror(uvst), st, errorString(st));
   return st;
 }
 

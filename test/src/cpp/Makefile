@@ -10,7 +10,7 @@ CPPFLAGS += -DMOCA_RPC_FULL
 EXETARGET = SampleNanoChannel SampleEasyChannel SampleChannel SampleChannelC \
 						SampleServer SampleServerC SampleRPCServer SampleRPCServerC \
 						Throughput ThroughputAsync EchoServer SpreadClient TubeClient \
-						BenchmarkThreadPool
+						BenchmarkThreadPool StressAsyncQueue
 CXXFLAGS += -std=c++11
 LDFLAGS += -std=c++11
 

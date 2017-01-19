@@ -140,7 +140,8 @@ public:
 
   int32_t request(int64_t *id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize)
   {
-    return protocol_.request(id, code, headers, payload, payloadSize);
+    ;
+    return protocol_.request((*id = protocol_.nextRequestId()), code, headers, payload, payloadSize);
   }
 
   int32_t localAddress(StringLite *localAddress, uint16_t *port) const;

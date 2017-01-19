@@ -82,12 +82,19 @@ public:
     }
     return protocol_.response(id, code, headers, payload, payloadSize);
   }
-  int32_t request(int64_t *id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize)
+  int32_t request(int64_t id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize)
   {
     if (isClosing()) {
       return RPC_ILLEGAL_STATE;
     }
     return protocol_.request(id, code, headers, payload, payloadSize);
+  }
+  int32_t request(int64_t *id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize)
+  {
+    if (isClosing()) {
+      return RPC_ILLEGAL_STATE;
+    }
+    return protocol_.request((*id = protocol_.nextRequestId()), code, headers, payload, payloadSize);
   }
 
   RPCChannelId channelId() const { return channelId_; }
