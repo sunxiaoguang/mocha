@@ -896,7 +896,7 @@ RPCChannelNano::Builder::build()
 RPCChannelNanoBuilder::RPCChannelNanoBuilder()
   : listener_(NULL), listenerUserData_(NULL), listenerMask_(0), timeout_(0x7FFFFFFFFFFFFFFFL),
   limit_(4 * 1024 * 1024), keepaliveInterval_(0x7FFFFFFFFFFFFFFFL), flags_(0),
-  logger_(rpcSimpleLogger), level_(DEFAULT_LOG_LEVEL), loggerUserData_(defaultRPCSimpleLoggerSink),
+  logger_(defaultRPCLogger), level_(defaultRPCLoggerLevel), loggerUserData_(defaultRPCLoggerUserData),
   attachment_(NULL), attachmentDestructor_(NULL)
 {
   uuidGenerate(&id_);
@@ -958,9 +958,9 @@ RPCChannelNanoBuilder::logger(RPCLogger logger, RPCLogLevel level, RPCOpaqueData
     level_ = level;
     loggerUserData_ = userData;
   } else {
-    logger_ = rpcSimpleLogger;
-    level_ = defaultRPCSimpleLoggerLogLevel;
-    loggerUserData_ = defaultRPCSimpleLoggerSink;
+    logger_ = defaultRPCLogger;
+    level_ = defaultRPCLoggerLevel;
+    loggerUserData_ = defaultRPCLoggerUserData;
   }
 }
 

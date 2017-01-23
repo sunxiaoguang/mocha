@@ -116,8 +116,8 @@ RPCChannel::Builder::build()
 RPCChannelBuilder::RPCChannelBuilder() : isClient_(true), listener_(NULL),
   listenerUserData_(NULL), listenerMask_(0), limit_(4 * 1024 * 1024), flags_(0),
   timeout_(0x7FFFFFFFFFFFFFFFL), keepaliveInterval_(0x7FFFFFFFFFFFFFFFL),
-  logger_(rpcSimpleLogger), level_(DEFAULT_LOG_LEVEL),
-  loggerUserData_(defaultRPCSimpleLoggerSink), dispatcher_(NULL),
+  logger_(defaultRPCLogger), level_(defaultRPCLoggerLevel),
+  loggerUserData_(defaultRPCLoggerUserData), dispatcher_(NULL),
   attachment_(NULL), attachmentDestructor_(NULL)
 {
   uuidGenerate(&id_);

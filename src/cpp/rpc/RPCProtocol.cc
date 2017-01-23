@@ -394,6 +394,7 @@ RPCProtocol::doReadCompressedPacketHeader()
   originalSize = safeRead<int32_t>(readBuffer);
   if (originalSize > limit_) {
     st = RPC_CORRUPTED_DATA;
+    RPC_LOG_WARN("Decompressed header size %d is greater than limit of %d", originalSize, limit_);
     goto cleanupExit;
   }
   ptr = reinterpret_cast<char *>(decompressedBuffer = static_cast<Bytef *>(malloc(originalSize)));
@@ -619,8 +620,8 @@ RPCProtocol::RPCProtocol(RPCOpaqueData channel, ShutdownChannel shutdown,
   swapByteOrder_(false), remoteVersion_(0), remoteFlags_(0), remoteIdSize_(0),
   localVersion_(0), localFlags_(0), packetId_(0),
   packetCode_(0), packetFlags_(0), packetType_(PACKET_TYPE_REQUEST), packetHeaderSize_(0),
-  packetPayloadSize_(0), dispatchedPayloadSize_(0), logger_(rpcSimpleLogger), level_(DEFAULT_LOG_LEVEL),
-  loggerUserData_(defaultRPCSimpleLoggerSink), listener_(listener), listenerUserData_(listenerUserData),
+  packetPayloadSize_(0), dispatchedPayloadSize_(0), logger_(defaultRPCLogger), level_(defaultRPCLoggerLevel),
+  loggerUserData_(defaultRPCLoggerUserData), listener_(listener), listenerUserData_(listenerUserData),
   writeSink_(writeSink), writeSinkUserData_(writeSinkUserData), writeOpaqueDataSize_(writeOpaqueDataSize),
   writeBufferAlignment_(writeBufferAlignment), limit_(0)
 {

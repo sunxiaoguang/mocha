@@ -121,7 +121,7 @@ RPCDispatcher::destroy(Timer *timer)
   return impl_->destroyTimer(reinterpret_cast<RPCDispatcherTimer *>(timer));
 }
 
-RPCDispatcherBuilder::RPCDispatcherBuilder() : logger_(rpcSimpleLogger), level_(RPC_LOG_LEVEL_INFO), loggerUserData_(defaultRPCSimpleLoggerSink)
+RPCDispatcherBuilder::RPCDispatcherBuilder() : logger_(defaultRPCLogger), level_(defaultRPCLoggerLevel), loggerUserData_(defaultRPCLoggerUserData)
 {
 }
 

@@ -6,8 +6,14 @@
 BEGIN_MOCA_RPC_NAMESPACE
 
 #define DEFAULT_LOG_LEVEL RPC_LOG_LEVEL_INFO
-extern volatile RPCLogLevel defaultRPCSimpleLoggerLogLevel;
-extern RPCSimpleLoggerSink *defaultRPCSimpleLoggerSink;
+//extern volatile RPCLogLevel defaultRPCSimpleLoggerLogLevel;
+//extern RPCSimpleLoggerSink *defaultRPCSimpleLoggerSink;
+
+
+extern RPCLogger defaultRPCLogger;
+extern volatile RPCLogLevel defaultRPCLoggerLevel;
+extern RPCOpaqueData defaultRPCLoggerUserData;
+
 
 END_MOCA_RPC_NAMESPACE
 

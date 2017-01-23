@@ -115,8 +115,8 @@ RPCServer::Builder::build()
 }
 
 RPCServerBuilder::RPCServerBuilder()
-  : builder_(RPCChannel::newBuilder()), logger_(rpcSimpleLogger),
-    level_(DEFAULT_LOG_LEVEL), loggerUserData_(defaultRPCSimpleLoggerSink),
+  : builder_(RPCChannel::newBuilder()), logger_(defaultRPCLogger),
+    level_(defaultRPCLoggerLevel), loggerUserData_(defaultRPCLoggerUserData),
     payloadLimit_(4 * 1024 * 1024), threadPoolSize_(0), dispatcher_(NULL),
     connectionLimitPerIp_(256), connectRateLimitPerIp_(256)
 {
@@ -173,9 +173,9 @@ RPCServerBuilder::logger(RPCLogger logger, RPCLogLevel level, RPCOpaqueData user
     level_ = level;
     loggerUserData_ = userData;
   } else {
-    logger_ = rpcSimpleLogger;
-    level_ = DEFAULT_LOG_LEVEL,
-    loggerUserData_ = defaultRPCSimpleLoggerSink;
+    logger_ = defaultRPCLogger;
+    level_ = defaultRPCLoggerLevel,
+    loggerUserData_ = defaultRPCLoggerUserData;
   }
   builder_->logger(logger, level, userData);
 }
@@ -317,8 +317,8 @@ RPCServerImpl::AddressEquals::operator()(const sockaddr_storage &lhs, const sock
 
 RPCServerImpl::RPCServerImpl()
   : wrapper_(NULL), channel_(NULL), channelDestroyed_(false), createEventDispatched_(false),
-    initializedFlags_(0), dispatcher_(NULL), logger_(rpcSimpleLogger), level_(DEFAULT_LOG_LEVEL),
-    loggerUserData_(defaultRPCSimpleLoggerSink), threadPool_(NULL),
+    initializedFlags_(0), dispatcher_(NULL), logger_(defaultRPCLogger), level_(defaultRPCLoggerLevel),
+    loggerUserData_(defaultRPCLoggerUserData), threadPool_(NULL),
     stopping_(false)
 {
 }

@@ -342,6 +342,8 @@ typedef struct RPCSimpleLoggerSink {
 } RPCSimpleLoggerSink;
 void rpcSimpleLogger(RPCLogLevel level, RPCOpaqueData userData, const char *func, const char *file, uint32_t line, const char *fmt, ...);
 
+void rpcLogger(RPCLogger defaultLogger, RPCLogLevel defaultLoggerLevel, RPCOpaqueData defaultLoggerUserData = NULL);
+
 END_MOCA_RPC_NAMESPACE
 
 #endif

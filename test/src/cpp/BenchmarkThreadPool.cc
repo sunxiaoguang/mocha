@@ -16,7 +16,7 @@ void dummy(RPCOpaqueData data)
 
 int32_t main(int32_t argc, char **argv)
 {
-  pool = new RPCThreadPool(rpcSimpleLogger, DEFAULT_LOG_LEVEL, defaultRPCSimpleLoggerSink);
+  pool = new RPCThreadPool(defaultRPCLogger, defaultRPCLoggerLevel, defaultRPCLoggerUserData);
   int32_t st;
   if (MOCA_RPC_FAILED(st = pool->init(4))) {
     return 1;

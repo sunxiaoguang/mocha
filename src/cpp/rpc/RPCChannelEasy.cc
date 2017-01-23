@@ -410,9 +410,9 @@ RPCChannelEasyImpl::init(const StringLite &address, const StringLite &id, int64_
     level_ = level;
     loggerUserData_ = loggerUserData;
   } else {
-    logger_ = rpcSimpleLogger;
-    level_ = defaultRPCSimpleLoggerLogLevel;
-    loggerUserData_ = defaultRPCSimpleLoggerSink;
+    logger_ = defaultRPCLogger;
+    level_ = defaultRPCLoggerLevel;
+    loggerUserData_ = defaultRPCLoggerUserData;
   }
   channel_ = RPCChannelNanoImpl::create(address, id, timeout, keepalive, flags, limit, logger_, level_,
       loggerUserData_, eventListener, this, 0xFFFFFFFF, NULL, NULL, RPCProtocol::NEGOTIATION_FLAG_NO_HINT);

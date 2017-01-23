@@ -1,4 +1,5 @@
 #include "RPCLogging.h"
+#include "RPCNano.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
@@ -57,8 +58,17 @@ void stdoutSink(RPCLogLevel level, RPCOpaqueData userData, const char *func, con
   printf("%s [%c:%s|%s:%u] %s\n", timeBuffer, levels[level], func, file, line, message);
 }
 
-volatile RPCLogLevel defaultRPCSimpleLoggerLogLevel = DEFAULT_LOG_LEVEL;
 static RPCSimpleLoggerSink simpleLoggerSink = { stdoutSink, NULL};
-RPCSimpleLoggerSink *defaultRPCSimpleLoggerSink = &simpleLoggerSink;
+RPCLogger defaultRPCLogger = rpcSimpleLogger;
+volatile RPCLogLevel defaultRPCLoggerLevel = DEFAULT_LOG_LEVEL;
+RPCOpaqueData defaultRPCLoggerUserData = &simpleLoggerSink;
+
+void rpcLogger(RPCLogger defaultLogger, RPCLogLevel defaultLoggerLevel, RPCOpaqueData defaultLoggerUserData)
+{
+  defaultRPCLoggerLevel = defaultLoggerLevel;
+  defaultRPCLogger = defaultLogger;
+  defaultRPCLoggerUserData = defaultLoggerUserData;
+  RPC_MEMORY_BARRIER_FULL();
+}
 
 END_MOCA_RPC_NAMESPACE
