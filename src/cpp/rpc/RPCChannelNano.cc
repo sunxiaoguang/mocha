@@ -731,14 +731,18 @@ RPCChannelNanoImpl::remoteId(StringLite *remoteId) const
 }
 
 void
+RPCChannelNanoImpl::notifyDispatcherThreadUnsafe() const
+{
+  write(pipe_[1], &emptyData_, sizeof(emptyData_));
+}
+
+void
 RPCChannelNanoImpl::notifyDispatcherThread() const
 {
   lock();
   addRef();
   unlock();
-
-  write(pipe_[1], &emptyData_, sizeof(emptyData_));
-
+  notifyDispatcherThreadUnsafe();
   release();
 }
 
@@ -795,6 +799,9 @@ RPCChannelNanoImpl::doWrite(ChainedBuffer **buffer)
   unlockPending();
   this->release();
   *buffer = NULL;
+  if (!isDispatcherThread()) {
+    notifyDispatcherThreadUnsafe();
+  }
 }
 
 void

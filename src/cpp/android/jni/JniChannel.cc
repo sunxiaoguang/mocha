@@ -823,11 +823,12 @@ cleanupExit:
   return;
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doRequest(JNIEnv *env, jclass clazz, jboolean nano,
+JNIEXPORT jlong JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doRequest(JNIEnv *env, jclass clazz, jboolean nano,
     jlong handle, jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
   TlsContextHelper helper(env);
   int32_t st;
+  int64_t id = 0;
   KeyValuePairs<StringLite, StringLite> *pairs = NULL;
   KeyValuePairs<StringLite, StringLite> realPairs;
   uint8_t *rawPayload = NULL;
@@ -845,9 +846,9 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doRequest(JNIE
   }
 
   if (nano) {
-    st = getChannel<RPCChannelNano>(handle)->request(code, pairs, rawPayload + offset, size);
+    st = getChannel<RPCChannelNano>(handle)->request(&id, code, pairs, rawPayload + offset, size);
   } else {
-    st = getChannel<RPCChannelEasy>(handle)->request(code, pairs, rawPayload + offset, size);
+    st = getChannel<RPCChannelEasy>(handle)->request(&id, code, pairs, rawPayload + offset, size);
   }
   if (st == RPC_OK) {
     goto cleanupExit;
@@ -860,7 +861,7 @@ cleanupExit:
   if (rawPayload) {
     env->ReleasePrimitiveArrayCritical(payload, rawPayload, 0);
   }
-  return;
+  return id;
 }
 
 int32_t doCreateNano(const char *address, jlong timeout, jlong keepalive, jobject jchannel)

@@ -95,6 +95,7 @@ private:
     return pthread_equal(pthread_self(), dispatcherThreadId_);
   }
 
+  void notifyDispatcherThreadUnsafe() const;
   void notifyDispatcherThread() const;
   int32_t convertError(const char *func, const char *file, uint32_t line) const;
   int32_t doWriteFully(int fd, iovec *iov, size_t *iovsize) const;
