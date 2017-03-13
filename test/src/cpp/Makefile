@@ -15,6 +15,7 @@ CXXFLAGS += -std=c++11
 LDFLAGS += -std=c++11
 
 INCLUDE_DIRS += $(PROJECT_HOME)/src/cpp/include $(PROJECT_HOME)/src/cpp/rpc $(LIBUV_ROOT)/include
+LIBRARY_DIRS += $(LIBUV_ROOT)/lib
 
 DEPLIBS += MocaRPC z uuid uv
 
