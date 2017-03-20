@@ -400,13 +400,6 @@ func (channel *Channel) receive() {
 			return
 		}
 		channel.updateReadTime()
-		defer func() {
-			if x := recover(); x != nil {
-				buf := make([]byte, 1<<20)
-				stacklen := runtime.Stack(buf, true)
-				log.Printf("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n%v\n", buf[:stacklen], x)
-			}
-		}()
 		switch packet.tp {
 		case packetTypeHint:
 			channel.onHint(packet)
