@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"math"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -282,7 +281,7 @@ func readStringBody(size int32, reader io.Reader, logger *log.Logger) (str strin
 	if body, err = readOpaqueData(size+1, reader, logger); err != nil {
 		return
 	}
-	str = string(body)
+	str = string(body[0:size])
 	return
 }
 
