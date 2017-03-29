@@ -122,7 +122,7 @@ func (channel *Channel) SendRequest(code int32, header []PacketHeader, payload [
 	return
 }
 
-func NewHeaderUnsafe(args ...string) []PacketHeader {
+func NewHeaderUnsafe(args ...[]byte) []PacketHeader {
 	header, err := NewHeader(args...)
 	if err != nil {
 		log.Panic(err.Error())
@@ -131,7 +131,7 @@ func NewHeaderUnsafe(args ...string) []PacketHeader {
 	return header
 }
 
-func NewHeader(args ...string) (header []PacketHeader, err error) {
+func NewHeader(args ...[]byte) (header []PacketHeader, err error) {
 	count := len(args)
 	if count == 0 {
 		header = emptyHeader

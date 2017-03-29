@@ -119,8 +119,8 @@ func (header packetHeader) payloadSize(endian binary.ByteOrder) int32 {
 }
 
 type PacketHeader struct {
-	Key   string
-	Value string
+	Key   []byte
+	Value []byte
 }
 
 type Packet struct {
@@ -133,24 +133,24 @@ type Packet struct {
 }
 
 func readPacketHeaderData(data []byte, endian binary.ByteOrder, logger *log.Logger) (header []PacketHeader, err error) {
-	var str string
+	var tmp []byte
 	limit := len(data)
 	lst := list.New()
 	var count int
 	for offset := 0; offset < len(data); {
 		reader := bytes.NewReader(data[offset:limit])
-		if str, err = readString(endian, reader, logger); err != nil {
+		if tmp, err = readStringBytes(endian, reader, logger); err != nil {
 			return
 		}
-		key := str
+		key := tmp
 		offset = limit - reader.Len()
 		reader = bytes.NewReader(data[offset:limit])
-		if str, err = readString(endian, reader, logger); err != nil {
+		if tmp, err = readStringBytes(endian, reader, logger); err != nil {
 			return
 		}
 		lst.PushBack(PacketHeader{
 			Key:   key,
-			Value: str,
+			Value: tmp,
 		})
 		offset = limit - reader.Len()
 		count++
@@ -268,20 +268,28 @@ func readOpaqueData(size int32, reader io.Reader, logger *log.Logger) (data []by
 	return
 }
 
-func readString(endian binary.ByteOrder, reader io.Reader, logger *log.Logger) (str string, err error) {
+func readStringBytes(endian binary.ByteOrder, reader io.Reader, logger *log.Logger) (bytes []byte, err error) {
 	var size int32
 	if size, err = readInt32(endian, reader, logger); err != nil {
 		return
 	}
-	return readStringBody(size, reader, logger)
+	return readStringBodyBytes(size, reader, logger)
+}
+
+func readStringBodyBytes(size int32, reader io.Reader, logger *log.Logger) (bytes []byte, err error) {
+	if bytes, err = readOpaqueData(size+1, reader, logger); err != nil {
+		return
+	}
+	bytes = bytes[0:size]
+	return
 }
 
 func readStringBody(size int32, reader io.Reader, logger *log.Logger) (str string, err error) {
-	var body []byte
-	if body, err = readOpaqueData(size+1, reader, logger); err != nil {
-		return
+	if bytes, err2 := readStringBodyBytes(size, reader, logger); err2 != nil {
+		err = err2
+	} else {
+		str = string(bytes)
 	}
-	str = string(body[0:size])
 	return
 }
 
