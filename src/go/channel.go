@@ -84,6 +84,7 @@ func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err err
 		shutdownChannel: make(chan struct{}),
 		localAddress:    conn.LocalAddr(),
 		remoteAddress:   conn.RemoteAddr(),
+		logger:          config.Logger,
 	}
 
 	channel.waitGroup.Add(1)
