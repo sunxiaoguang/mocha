@@ -1,6 +1,5 @@
 PROJECT_HOME = ../../..
 BUILD_DIR ?= $(PROJECT_HOME)/build/make
-LIBUV_ROOT ?= /usr/local/libuv
 
 OUTDIR_SUFFIX = .lite
 include $(BUILD_DIR)/make.defs
@@ -10,15 +9,16 @@ CPPSRCS += RPCProtocol.cc RPCChannelNano.cc RPCChannelEasy.cc RPCLogging.cc RPCL
 	RPCClientChannel.cc RPCServerChannel.cc RPCDispatcher.cc RPCProtocolC.cc \
 	RPCChannelC.cc RPCDispatcherC.cc RPCServer.cc RPCServerC.cc RPCThreadPool.cc
 INCLUDE_DIRS += ../include $(LIBUV_ROOT)/include
-LIBRARY_DIRS += $(LIBUV_ROOT)/lib
 
 SOTARGET = MocaRPCLite
 LIB_NAME = MocaRPCLite
 
-DEPLIBS += uv z
+DEPLIBS += z dl
 
 ifeq ($(PLATFORM), __LINUX__)
 	DEPLIBS += uuid rt
 endif
+
+OBJS += $(wildcard $(LIBUV_ROOT)/lib/*.o)
 
 include $(BUILD_DIR)/make.rules

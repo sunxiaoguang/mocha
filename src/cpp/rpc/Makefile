@@ -1,6 +1,5 @@
 PROJECT_HOME = ../../..
 BUILD_DIR ?= $(PROJECT_HOME)/build/make
-
 include $(BUILD_DIR)/make.defs
 
 PRE_BUILD = build 
