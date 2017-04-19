@@ -9,7 +9,7 @@ ifeq ($(wildcard $(LIBUV_ROOT)/lib/*.o), )
 	SUBDIRS += deps
 endif
 
-SUBDIRS += src/cpp/rpc src/cpp/android/jni
+SUBDIRS += src/cpp/rpc
 ifeq ($(THE_OS), darwin)
 	SUBDIRS += src/cpp/ios
 endif

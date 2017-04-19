@@ -13,7 +13,7 @@ build:
 	cd $(LIBUV_ROOT)/lib && ar x libuv.a
 
 clean-all:
-	cd libuv-1.11.0 && make clean
+	cd libuv-1.11.0 && make clean || true
 	rm -rf $(LIBUV_ROOT)
 
 include $(BUILD_DIR)/make.rules
