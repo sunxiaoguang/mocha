@@ -314,7 +314,7 @@ func (channel *Channel) serializePacketHeader(packet *Packet) []byte {
 	return buffer.Bytes()
 }
 
-func (channel *Channel) sendPacket(packet *Packet) (err error) {
+func (channel *Channel) doSendPacket(packet *Packet) (err error) {
 	header := channel.serializePacketHeader(packet)
 	headerLength := len(header)
 	payloadLength := 0
@@ -353,11 +353,19 @@ func (channel *Channel) onHint(packet *Packet) {
 }
 
 func (channel *Channel) onRequest(packet *Packet) {
-	channel.Request <- packet
+	atomic.AddInt32(&channel.barrier, 1)
+	defer atomic.AddInt32(&channel.barrier, -1)
+	if channel.running() {
+		channel.Request <- packet
+	}
 }
 
 func (channel *Channel) onResponse(packet *Packet) {
-	channel.Response <- packet
+	atomic.AddInt32(&channel.barrier, 1)
+	defer atomic.AddInt32(&channel.barrier, -1)
+	if channel.running() {
+		channel.Response <- packet
+	}
 }
 
 func (channel *Channel) negotiate() (err error) {
@@ -375,6 +383,7 @@ func (channel *Channel) negotiate() (err error) {
 	}
 
 	negotiationHeader := negotiationHeader(buffer[0:negotiationHeaderFixedSize])
+	channel.conn.SetReadDeadline(time.Now().Add(channel.config.Timeout))
 	if _, err = io.ReadFull(channel.reader, negotiationHeader); err != nil {
 		if err != io.EOF && !strings.Contains(err.Error(), "closed") && !strings.Contains(err.Error(), "reset by peer") {
 			channel.config.Logger.Printf("[E]: Failed to read negotiation header %v", err)
@@ -393,6 +402,7 @@ func (channel *Channel) negotiate() (err error) {
 		return
 	}
 	channel.remoteID, err = readStringBody(peerIDSize, channel.reader, channel.logger)
+	channel.conn.SetReadDeadline(time.Now().Add(time.Hour * 0xffff))
 	return
 }
 
@@ -420,14 +430,9 @@ func (channel *Channel) receive() {
 
 func (channel *Channel) send() {
 	defer channel.waitGroup.Done()
-	for {
-		select {
-		case packet, running := <-channel.packet:
-			if !running || channel.sendPacket(packet) != nil {
-				channel.doClose()
-			}
-		case <-channel.shutdownChannel:
-			return
+	for packet := range channel.packet {
+		if channel.doSendPacket(packet) != nil {
+			channel.doClose()
 		}
 	}
 }
@@ -437,12 +442,7 @@ func (channel *Channel) nextPacketID() int64 {
 }
 
 func (channel *Channel) sendKeepalive() {
-	channel.packet <- &Packet{
-		ID:    channel.nextPacketID(),
-		Code:  HintTypeKeepalive,
-		tp:    packetTypeHint,
-		flags: 0,
-	}
+	channel.sendPacket(channel.nextPacketID(), HintTypeKeepalive, nil, nil, packetTypeHint)
 }
 
 func (channel *Channel) checkTimeout(timeout time.Duration, now time.Time) {
@@ -456,30 +456,26 @@ func (channel *Channel) checkTimeout(timeout time.Duration, now time.Time) {
 
 func (channel *Channel) timer() {
 	defer channel.waitGroup.Done()
+	defer channel.ticker.Stop()
 	keepAlive := channel.config.Keepalive
 	if atomic.LoadInt32(&channel.remoteFlags)&negotiationFlagNoHint != 0 {
 		keepAlive = time.Duration(time.Nanosecond * math.MaxInt64)
 	}
 	timeout := channel.config.Timeout
-	sleepTime := keepAlive
-	if sleepTime > timeout {
-		sleepTime = timeout
-	}
-
-	nextKeepaliveTime := time.Now().Add(keepAlive)
-	nextTimeoutTime := time.Now().Add(timeout)
-
-	for {
-		select {
-		case <-channel.shutdownChannel:
-			return
-		case now := <-time.After(sleepTime):
-			if now.After(nextKeepaliveTime) {
-				channel.sendKeepalive()
-			}
-			if now.After(nextTimeoutTime) {
-				channel.checkTimeout(timeout, now)
-			}
+	now := time.Now()
+	nextKeepaliveTime := now.Add(keepAlive)
+	nextTimeoutTime := now.Add(timeout)
+	for now = range channel.ticker.C {
+		if channel.stopped() {
+			break
+		}
+		if now.After(nextKeepaliveTime) {
+			channel.sendKeepalive()
+			nextKeepaliveTime = now.Add(keepAlive)
+		}
+		if now.After(nextTimeoutTime) {
+			channel.checkTimeout(timeout, now)
+			nextTimeoutTime = now.Add(timeout)
 		}
 	}
 }

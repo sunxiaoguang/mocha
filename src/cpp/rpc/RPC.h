@@ -12,11 +12,10 @@ private:
   RPCMutex asyncMutex_;
   RPCCondVar asyncCond_;
   bool asyncFinished_;
-  int32_t initialized_;
   int32_t asyncStatus_;
 
 public:
-  RPCCompletionToken() : asyncFinished_(false), initialized_(0), asyncStatus_(0) {
+  RPCCompletionToken() : asyncFinished_(false), asyncStatus_(0) {
   }
   int32_t init() {
     return 0;

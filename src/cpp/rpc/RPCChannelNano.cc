@@ -733,7 +733,8 @@ RPCChannelNanoImpl::remoteId(StringLite *remoteId) const
 void
 RPCChannelNanoImpl::notifyDispatcherThreadUnsafe() const
 {
-  write(pipe_[1], &emptyData_, sizeof(emptyData_));
+  ssize_t ignored = write(pipe_[1], &emptyData_, sizeof(emptyData_));
+  RPC_NOT_USED(ignored);
 }
 
 void
@@ -756,7 +757,8 @@ RPCChannelNanoImpl::breakLoop() const
   }
   unlock();
 
-  write(pipe_[1], &emptyData_, sizeof(emptyData_));
+  ssize_t ignored = write(pipe_[1], &emptyData_, sizeof(emptyData_));
+  RPC_NOT_USED(ignored);
 
   release();
 

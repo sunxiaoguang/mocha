@@ -28,6 +28,7 @@
 #define CHAINED_BUFFER_SIZE(size) MOCA_RPC_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
 
 #define RPC_MEMORY_BARRIER_FULL __sync_synchronize
+#define RPC_NOT_USED(V) ((void) V)
 
 BEGIN_MOCA_RPC_NAMESPACE
 class RPCMutex : private RPCNonCopyable
@@ -47,7 +48,6 @@ public:
 class RPCCondVar : private RPCNonCopyable
 {
 private:
-  bool initialized_;
   mutable pthread_cond_t cond_;
 public:
   RPCCondVar();

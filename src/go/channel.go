@@ -9,13 +9,16 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 var emptyHeader = make([]PacketHeader, 0)
 var emptyOpaqueData = make([]byte, 0)
+var alreadyStoppedError = errors.New("Server channel has been stopped already")
 
 /*
  Configuration for channel.
@@ -40,59 +43,119 @@ type ChannelConfig struct {
 	Logger    *log.Logger
 }
 
+type lifecycle struct {
+	shutdown int32
+	barrier  int32
+}
+
+func (l *lifecycle) ensure(callable func()) {
+	atomic.AddInt32(&l.barrier, 1)
+	defer atomic.AddInt32(&l.barrier, -1)
+	if l.running() {
+		callable()
+	}
+}
+
+func (l *lifecycle) safe() bool {
+	return atomic.LoadInt32(&l.barrier) == 0
+}
+
+func (l *lifecycle) running() bool {
+	return atomic.LoadInt32(&l.shutdown) == 0
+}
+
+func (l *lifecycle) stopped() bool {
+	return !l.running()
+}
+
+func (l *lifecycle) stop(prolog, resolve, epilog func()) {
+	if atomic.CompareAndSwapInt32(&l.shutdown, 0, 1) {
+		if prolog != nil {
+			prolog()
+		}
+		for {
+			if l.safe() {
+				if epilog != nil {
+					epilog()
+				}
+				break
+			} else {
+				if resolve != nil {
+					resolve()
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+	}
+}
+
 type Channel struct {
-	config          *ChannelConfig
-	logger          *log.Logger
-	conn            io.ReadWriteCloser
-	reader          *bufio.Reader
-	remoteEndian    binary.ByteOrder
-	remoteVersion   int32
-	remoteFlags     int32
-	packet          chan *Packet
-	packetID        int64
-	lastReadTime    int64
-	remoteID        string
-	localID         string
-	localAddress    net.Addr
-	remoteAddress   net.Addr
-	waitGroup       sync.WaitGroup
-	shutdownLock    sync.Mutex
-	shutdownChannel chan struct{}
-	shutdown        bool
+	lifecycle
+	config        *ChannelConfig
+	logger        *log.Logger
+	conn          net.Conn
+	reader        *bufio.Reader
+	remoteEndian  binary.ByteOrder
+	remoteVersion int32
+	remoteFlags   int32
+	packet        chan *Packet
+	packetID      int64
+	lastReadTime  int64
+	remoteID      string
+	localID       string
+	localAddress  net.Addr
+	remoteAddress net.Addr
+	waitGroup     sync.WaitGroup
+	ticker        *time.Ticker
 
 	Request  chan *Packet
 	Response chan *Packet
 }
 
 type ServerChannel struct {
-	config       *ChannelConfig
-	logger       *log.Logger
-	listener     net.Listener
-	shutdownLock sync.Mutex
-	shutdown     bool
+	lifecycle
+	config   *ChannelConfig
+	logger   *log.Logger
+	listener net.Listener
 }
 
 func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err error) {
 	channel = &Channel{
-		config:          config,
-		reader:          bufio.NewReader(conn),
-		localID:         config.ID,
-		conn:            conn,
-		Request:         make(chan *Packet, 64),
-		Response:        make(chan *Packet, 64),
-		packet:          make(chan *Packet, 64),
-		shutdownChannel: make(chan struct{}),
-		localAddress:    conn.LocalAddr(),
-		remoteAddress:   conn.RemoteAddr(),
-		logger:          config.Logger,
+		config:        config,
+		reader:        bufio.NewReader(conn),
+		localID:       config.ID,
+		conn:          conn,
+		Request:       make(chan *Packet, 64),
+		Response:      make(chan *Packet, 64),
+		packet:        make(chan *Packet, 64),
+		localAddress:  conn.LocalAddr(),
+		remoteAddress: conn.RemoteAddr(),
+		logger:        config.Logger,
 	}
 
+	go channel.run()
+	return channel, nil
+}
+
+func (channel *Channel) run() {
 	channel.waitGroup.Add(1)
 	defer channel.waitGroup.Done()
-	if err = channel.negotiate(); err != nil {
+	if err := channel.negotiate(); err != nil {
 		channel.doClose()
 		return
 	}
+	sleepTime := channel.config.Keepalive
+	if atomic.LoadInt32(&channel.remoteFlags)&negotiationFlagNoHint != 0 {
+		sleepTime = time.Duration(time.Nanosecond * math.MaxInt64)
+	}
+	if sleepTime > channel.config.Timeout {
+		sleepTime = channel.config.Timeout
+	}
+	if sleepTime > time.Second {
+		/* at least check timeout once a second in case user set a long timeout */
+		sleepTime = time.Second
+	}
+	channel.ticker = time.NewTicker(sleepTime)
 	channel.updateReadTime()
 	channel.waitGroup.Add(3)
 	go channel.receive()
@@ -123,7 +186,7 @@ func (channel *Channel) SendRequest(code int32, header []PacketHeader, payload [
 	return
 }
 
-func NewHeaderUnsafe(args ...[]byte) []PacketHeader {
+func NewHeaderMust(args ...[]byte) []PacketHeader {
 	header, err := NewHeader(args...)
 	if err != nil {
 		log.Panic(err.Error())
@@ -153,80 +216,75 @@ func NewHeader(args ...[]byte) (header []PacketHeader, err error) {
 	return
 }
 
+func (channel *Channel) sendPacket(id int64, code int32, header []PacketHeader, payload []uint8, tp int32) {
+	channel.ensure(func() {
+		if channel.running() {
+			channel.packet <- &Packet{
+				ID:      id,
+				Code:    code,
+				tp:      tp,
+				flags:   0,
+				Header:  header,
+				Payload: payload,
+			}
+		}
+	})
+}
+
 func (channel *Channel) SendRequestWithID(id int64, code int32, header []PacketHeader, payload []uint8) {
-	channel.packet <- &Packet{
-		ID:      id,
-		Code:    code,
-		tp:      packetTypeRequest,
-		flags:   0,
-		Header:  header,
-		Payload: payload,
-	}
-	return
+	channel.sendPacket(id, code, header, payload, packetTypeRequest)
 }
 
 func (channel *Channel) SendResponse(id int64, code int32, header []PacketHeader, payload []uint8) {
-	channel.packet <- &Packet{
-		ID:      id,
-		Code:    code,
-		tp:      packetTypeResponse,
-		flags:   0,
-		Header:  header,
-		Payload: payload,
+	channel.sendPacket(id, code, header, payload, packetTypeResponse)
+}
+
+func drainChannel(channel chan *Packet) {
+	for {
+		select {
+		case <-channel:
+		default:
+			return
+		}
 	}
-	return
 }
 
 func (channel *Channel) doClose() {
-	if channel.shutdown {
-		return
-	}
-	channel.shutdown = true
-	close(channel.shutdownChannel)
-	channel.conn.Close()
+	channel.stop(func() {
+		channel.conn.Close()
+	}, func() {
+		drainChannel(channel.packet)
+		drainChannel(channel.Request)
+		drainChannel(channel.Response)
+	}, func() {
+		close(channel.packet)
+		close(channel.Request)
+		close(channel.Response)
+	})
 }
 
 func (channel *Channel) Close() {
-	channel.shutdownLock.Lock()
-	defer channel.shutdownLock.Unlock()
-	if channel.shutdown {
-		return
-	}
 	channel.doClose()
-	done := make(chan struct{})
-	go func() {
-		channel.waitGroup.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-channel.Request:
-	case <-channel.Response:
-	case <-channel.packet:
-	}
-	close(channel.packet)
-	close(channel.Request)
-	close(channel.Response)
-	return
+	channel.waitGroup.Wait()
 }
 
 func (channel *ServerChannel) Accept() (client *Channel, err error) {
-	var conn net.Conn
-	if conn, err = channel.listener.Accept(); err != nil {
-		return
+	channel.ensure(func() {
+		var conn net.Conn
+		if conn, err = channel.listener.Accept(); err == nil {
+			client, err = newChannel(conn, channel.config)
+		}
+	})
+	if client == nil && err == nil {
+		err = alreadyStoppedError
 	}
-	return newChannel(conn, channel.config)
+	return
 }
 
 func (channel *ServerChannel) Close() {
-	channel.shutdownLock.Lock()
-	defer channel.shutdownLock.Unlock()
-	if channel.shutdown {
-		return
-	}
-	channel.shutdown = true
-	channel.listener.Close()
-	return
+	channel.stop(nil, func() {
+		channel.listener.Close()
+	}, nil)
 }
 
 func checkConfig(config *ChannelConfig) *ChannelConfig {

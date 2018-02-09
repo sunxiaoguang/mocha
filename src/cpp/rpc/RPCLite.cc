@@ -1,7 +1,6 @@
 #include "RPCLite.h"
 #include "RPCNano.h"
 #include "RPCLogging.h"
-#include <sys/eventfd.h>
 #include <unistd.h>
 
 BEGIN_MOCA_RPC_NAMESPACE
@@ -385,7 +384,16 @@ RPCAsyncQueue::doEnqueue(SubQueue *queue, RPCAsyncTask task, RPCOpaqueData data)
       queue->pendingMutex.unlock();
     }
   } else {
-    write(queue->pipe[1], &free, sizeof(free));
+    size_t offset = 0;
+    char *payload = reinterpret_cast<char *>(&free);
+    while (offset < sizeof(free)) {
+      ssize_t wr = write(queue->pipe[1], payload + offset, sizeof(free) - offset);
+      if (wr < 0) {
+        return RPC_INTERNAL_ERROR;
+      } else {
+        offset += wr;
+      }
+    }
   }
 
   return RPC_OK;

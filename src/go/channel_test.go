@@ -2,6 +2,8 @@ package mocharpc
 
 import (
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -41,7 +43,7 @@ func TestConnect(t *testing.T) {
         return
       }
     case <-time.After(time.Second * 1):
-      id := channel.SendRequest(code, NewHeaderUnsafe("abc", "def", "123", "456"), nil)
+      id := channel.SendRequest(code, NewHeaderMust("abc", "def", "123", "456"), nil)
       log.Printf("send request %v", id)
       code += 1
       if code >= 3 {
@@ -76,18 +78,21 @@ func serve(server *ServerChannel) {
 	for {
 		if client, err := server.Accept(); err != nil {
 			log.Println("Could not accept client ", err)
+			break
 		} else {
 			go serveClient(client)
 		}
 	}
 }
 
-func TestServerOnly(t *testing.T) {
+func testServerOnly(t *testing.T) {
 	config := ChannelConfig{
 		Address: "localhost:9191",
 	}
 	server, err1 := Bind(&config)
-	log.Println("Server ", err1)
+	if err1 != nil {
+		panic(err1)
+	}
 	go func() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGQUIT)
@@ -108,7 +113,9 @@ func TestServerClient(t *testing.T) {
 		Address: "localhost:9191",
 	}
 	server, err1 := Bind(&config)
-	log.Println("Server ", err1)
+	if err1 != nil {
+		panic(err1)
+	}
 	go func() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGQUIT)
@@ -119,12 +126,15 @@ func TestServerClient(t *testing.T) {
 			log.Printf("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
 		}
 	}()
+	go http.ListenAndServe(":10000", nil)
 	var code int32
 
 	go serve(server)
 
 	client, err2 := Connect(&config)
-	log.Println("Client ", err2)
+	if err2 != nil {
+		panic(err2)
+	}
 
 	for {
 		select {
@@ -142,11 +152,11 @@ func TestServerClient(t *testing.T) {
 			}
 		case <-time.After(time.Second * 1):
 			for idx := 0; idx < 10000; idx++ {
-				client.SendRequest(code, NewHeaderUnsafe("abc", "def", "123", "456"), nil)
+				client.SendRequest(code, NewHeaderMust([]byte("abc"), []byte("def"), []byte("123"), []byte("456")), nil)
 			}
 			log.Printf("Done sending request")
 			code++
-			if code >= 10 {
+			if code >= 1 {
 				client.Close()
 				goto exitTest
 			}
