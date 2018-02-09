@@ -1,11 +1,11 @@
-#ifndef __MOCA_RPC_ATOMIC_INTERNAL_H__
-#define __MOCA_RPC_ATOMIC_INTERNAL_H__ 1
-#include "moca/rpc/RPC.h"
+#ifndef __MOCHA_RPC_ATOMIC_INTERNAL_H__
+#define __MOCHA_RPC_ATOMIC_INTERNAL_H__ 1
+#include "mocha/rpc/RPC.h"
 #include "RPCNano.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
-#ifndef MOCA_RPC_FULL
+#ifndef MOCHA_RPC_FULL
 template<typename T>
 class RPCAtomic : private RPCNonCopyable
 {
@@ -51,6 +51,6 @@ public:
 };
 #endif
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
-#endif /* __MOCA_RPC_ATOMIC_INTERNAL_H__ */
+#endif /* __MOCHA_RPC_ATOMIC_INTERNAL_H__ */

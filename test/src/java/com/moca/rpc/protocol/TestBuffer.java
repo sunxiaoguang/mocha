@@ -1,4 +1,4 @@
-package com.moca.rpc.protocol;
+package com.mocha.rpc.protocol;
 
 import io.netty.buffer.*;
 

@@ -1,10 +1,10 @@
-#ifndef __MOCA_RPC_PROTOCOL_INTERNAL_H__
-#define __MOCA_RPC_PROTOCOL_INTERNAL_H__
+#ifndef __MOCHA_RPC_PROTOCOL_INTERNAL_H__
+#define __MOCHA_RPC_PROTOCOL_INTERNAL_H__
 
-#include "moca/rpc/RPCChannel.h"
+#include "mocha/rpc/RPCChannel.h"
 #include "RPCNano.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCProtocol : private RPCNonCopyable
 {
@@ -265,5 +265,5 @@ public:
   int32_t getState() const { return state_; }
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 #endif

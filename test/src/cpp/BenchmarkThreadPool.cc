@@ -3,7 +3,7 @@
 #include "RPCLogging.h"
 #include <unistd.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 RPCThreadPool *pool;
 const int32_t count = 1000000;
@@ -18,7 +18,7 @@ int32_t main(int32_t argc, char **argv)
 {
   pool = new RPCThreadPool(defaultRPCLogger, defaultRPCLoggerLevel, defaultRPCLoggerUserData);
   int32_t st;
-  if (MOCA_RPC_FAILED(st = pool->init(4))) {
+  if (MOCHA_RPC_FAILED(st = pool->init(4))) {
     return 1;
   }
 

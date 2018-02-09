@@ -3,7 +3,7 @@
 #include "RPCLogging.h"
 #include <unistd.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 int32_t convertUVError(int32_t uvst, RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData, const char *func, const char *file, uint32_t line)
 {
@@ -121,45 +121,45 @@ int32_t convertUVError(int32_t uvst, RPCLogger logger, RPCLogLevel level, RPCOpa
   return st;
 }
 
-void convert(const MocaRPCKeyValuePairs *from, KeyValuePairs<StringLite, StringLite> *to)
+void convert(const MochaRPCKeyValuePairs *from, KeyValuePairs<StringLite, StringLite> *to)
 {
   to->clear();
   StringLite tmpKey, tmpValue;
   for (int32_t idx = 0; idx < from->size; ++idx) {
-    MocaRPCKeyValuePair *pair = from->pair[idx];
-    tmpKey.assign(MocaRPCStringGet(pair->key), pair->key->size);
-    tmpValue.assign(MocaRPCStringGet(pair->value), pair->value->size);
+    MochaRPCKeyValuePair *pair = from->pair[idx];
+    tmpKey.assign(MochaRPCStringGet(pair->key), pair->key->size);
+    tmpValue.assign(MochaRPCStringGet(pair->value), pair->value->size);
     to->transfer(tmpKey, tmpValue);
   }
 }
 
-void convertSink(int32_t index, MocaRPCKeyValuePair *to, void *userData)
+void convertSink(int32_t index, MochaRPCKeyValuePair *to, void *userData)
 {
   const KeyValuePair<StringLite, StringLite> *pair = static_cast<KeyValuePairs<StringLite, StringLite> *>(userData)->get(index);
-  MocaRPCStringWrapTo(pair->key.str(), static_cast<int32_t>(pair->key.size()), to->key);
-  MocaRPCStringWrapTo(pair->value.str(), static_cast<int32_t>(pair->value.size()), to->value);
+  MochaRPCStringWrapTo(pair->key.str(), static_cast<int32_t>(pair->key.size()), to->key);
+  MochaRPCStringWrapTo(pair->value.str(), static_cast<int32_t>(pair->value.size()), to->value);
 }
 
-void convert(const KeyValuePairs<StringLite, StringLite> *from, MocaRPCWrapper *wrapper)
+void convert(const KeyValuePairs<StringLite, StringLite> *from, MochaRPCWrapper *wrapper)
 {
   size_t size = from->size();
   if (size == 0) {
     wrapper->headers = wrapper->empty;
     return;
   }
-  wrapper->buffer = MocaRPCKeyValuePairsWrapToInternal(static_cast<int32_t>(size),
+  wrapper->buffer = MochaRPCKeyValuePairsWrapToInternal(static_cast<int32_t>(size),
       convertSink, const_cast<KeyValuePairs<StringLite, StringLite> *>(from), wrapper->buffer);
   wrapper->headers = wrapper->buffer;
   wrapper->headers->size = static_cast<int32_t>(size);
-  MocaRPCKeyValuePair **headers = wrapper->headers->pair;
+  MochaRPCKeyValuePair **headers = wrapper->headers->pair;
   for (size_t idx = 0; idx < size; ++idx) {
     const KeyValuePair<StringLite, StringLite> *pair = from->get(idx);
-    MocaRPCStringWrapTo(pair->key.str(), static_cast<int32_t>(pair->key.size()), headers[idx]->key);
-    MocaRPCStringWrapTo(pair->value.str(), static_cast<int32_t>(pair->value.size()), headers[idx]->value);
+    MochaRPCStringWrapTo(pair->key.str(), static_cast<int32_t>(pair->key.size()), headers[idx]->key);
+    MochaRPCStringWrapTo(pair->value.str(), static_cast<int32_t>(pair->value.size()), headers[idx]->value);
   }
 }
 
-void destroyAttachment(MocaRPCWrapper *wrapper)
+void destroyAttachment(MochaRPCWrapper *wrapper)
 {
   if (wrapper->attachment && wrapper->attachmentDestructor) {
     wrapper->attachmentDestructor(wrapper->attachment);
@@ -168,7 +168,7 @@ void destroyAttachment(MocaRPCWrapper *wrapper)
   wrapper->attachmentDestructor = NULL;
 }
 
-void destroy(MocaRPCWrapper *wrapper)
+void destroy(MochaRPCWrapper *wrapper)
 {
   if (wrapper == NULL) {
     return;
@@ -408,7 +408,7 @@ RPCAsyncQueue::init(int32_t numSubQueue, int32_t taskPoolSize)
   queueSize_ = sizeof(SubQueue) + (sizeof(AsyncTask) * taskPoolSize_);
   queues_ = static_cast<SubQueue *>(calloc(1, static_cast<size_t>(queueSize_) * size_));
   for (int32_t idx = 0; idx < size_; ++idx) {
-    if (MOCA_RPC_FAILED(st = initQueue(queue(idx)))) {
+    if (MOCHA_RPC_FAILED(st = initQueue(queue(idx)))) {
       return st;
     }
   }
@@ -437,7 +437,7 @@ RPCAsyncQueue::dequeue(RPCAsyncTaskSink sink, RPCOpaqueData sinkUserData)
   int32_t st = RPC_OK;
   int32_t st2;
   for (int32_t idx = 0; idx < size_; ++idx) {
-    if ((MOCA_RPC_FAILED(st2 = doDequeue(queue(idx), sink, sinkUserData, false)))) {
+    if ((MOCHA_RPC_FAILED(st2 = doDequeue(queue(idx), sink, sinkUserData, false)))) {
       RPC_LOG_ERROR("Could not dequeue async task from sub queue %d. %d:%s", idx, st2, errorString(st2));
       if (st == RPC_OK) {
         st = st2;
@@ -447,4 +447,4 @@ RPCAsyncQueue::dequeue(RPCAsyncTaskSink sink, RPCOpaqueData sinkUserData)
   return st;
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

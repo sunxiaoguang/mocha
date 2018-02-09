@@ -1,10 +1,10 @@
-#ifndef __MOCA_RPC_THREAD_POOL_INTERNAL_H__
-#define __MOCA_RPC_THREAD_POOL_INTERNAL_H__ 1
+#ifndef __MOCHA_RPC_THREAD_POOL_INTERNAL_H__
+#define __MOCHA_RPC_THREAD_POOL_INTERNAL_H__ 1
 
 #include "RPC.h"
 #include "uv.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCThreadPool : private RPCNonCopyable
 {
@@ -44,6 +44,6 @@ public:
   int32_t shutdown();
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
-#endif /* __MOCA_RPC_THREAD_POOL_INTERNAL_H__*/
+#endif /* __MOCHA_RPC_THREAD_POOL_INTERNAL_H__*/

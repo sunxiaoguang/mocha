@@ -1,9 +1,9 @@
-package com.moca.rpc;
+package com.mocha.rpc;
 
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
-import com.moca.rpc.protocol.*;
+import com.mocha.rpc.protocol.*;
 
 public class TestChannelEasy
 {

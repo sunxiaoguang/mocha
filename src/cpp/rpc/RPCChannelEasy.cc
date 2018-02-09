@@ -15,7 +15,7 @@
 #include <sys/time.h>
 #include "RPCLogging.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 RPCChannelEasy::~RPCChannelEasy()
 {
@@ -175,7 +175,7 @@ RPCChannelEasy::interrupt() const
   return impl_->interrupt();
 }
 
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
 void convert(const KeyValuePairs<StringLite, StringLite> *input, KeyValueMap *output);
 void convert(const KeyValueMap *from, KeyValuePairs<StringLite, StringLite> *to);
 
@@ -292,9 +292,9 @@ RPCChannelEasyImpl::close()
 #define CHECK_STATUS              \
   if (status_ != RPC_OK) {        \
     switch (status_) {            \
-      case MOCA_RPC_TIMEOUT:      \
-      case MOCA_RPC_WOULDBLOCK:   \
-      case MOCA_RPC_CANCELED:     \
+      case MOCHA_RPC_TIMEOUT:      \
+      case MOCHA_RPC_WOULDBLOCK:   \
+      case MOCHA_RPC_CANCELED:     \
         status_ = RPC_OK;         \
         break;                    \
       default:                    \
@@ -351,13 +351,13 @@ RPCChannelEasyImpl::request(int64_t *id, int32_t code, const T *headers, const v
 {
   CHECK_STATUS
   int32_t st = request(id, code, headers, payload, payloadSize);
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     return st;
   }
   int64_t responseId = 0;
   int64_t requestId = *id;
   bool isResponse;
-  while ((st = poll(&responseId, responseCode, responseHeaders, responsePayload, responsePayloadSize, &isResponse)) == MOCA_RPC_OK) {
+  while ((st = poll(&responseId, responseCode, responseHeaders, responsePayload, responsePayloadSize, &isResponse)) == MOCHA_RPC_OK) {
     if (responseId == requestId && isResponse) {
       break;
     }
@@ -383,7 +383,7 @@ RPCChannelEasyImpl::poll(int64_t *id, int32_t *code, const KeyValuePairs<StringL
   }
 
   if (state_ != STATE_DISPATCH) {
-    MOCA_RPC_DO(status_)
+    MOCHA_RPC_DO(status_)
   }
   const Packet &packet = packets_.get(currentPacket_++)->value;
   *isResponse = packet.isResponse;
@@ -398,7 +398,7 @@ RPCChannelEasyImpl::poll(int64_t *id, int32_t *code, const KeyValuePairs<StringL
   if (payloadSize != NULL) {
     *payloadSize = packet.payload.size();
   }
-  return MOCA_RPC_OK;
+  return MOCHA_RPC_OK;
 }
 
 int32_t
@@ -434,7 +434,7 @@ RPCChannelEasyImpl::interrupt() const
   return channel_->breakLoop();
 }
 
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
 int32_t
 RPCChannelEasyImpl::request(int64_t *id, int32_t code, const KeyValueMap *headers, const void *payload, size_t payloadSize) const
 {
@@ -462,4 +462,4 @@ RPCChannelEasyImpl::poll(int64_t *id, int32_t *code, const KeyValueMap **headers
 }
 #endif
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

@@ -1,9 +1,9 @@
-#include <moca/rpc/RPCChannel.h>
-#include <moca/rpc/RPCDispatcher.h>
+#include <mocha/rpc/RPCChannel.h>
+#include <mocha/rpc/RPCDispatcher.h>
 #include <stdint.h>
 #include <unistd.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 void testTimer(RPCDispatcher *dispatcher, RPCDispatcher::Timer *timer, int32_t events, RPCOpaqueData userData)
 {

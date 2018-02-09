@@ -1,11 +1,11 @@
-#ifndef __MOCA_RPC_SERVER_INTERNAL_H__
-#define __MOCA_RPC_SERVER_INTERNAL_H__ 1
+#ifndef __MOCHA_RPC_SERVER_INTERNAL_H__
+#define __MOCHA_RPC_SERVER_INTERNAL_H__ 1
 
-#include <moca/rpc/RPCServer.h>
+#include <mocha/rpc/RPCServer.h>
 #include "RPCThreadPool.h"
 #include <sys/socket.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCServerImpl : public RPCObject, private RPCNonCopyable
 {
@@ -150,6 +150,6 @@ public:
   RPCServer *build();
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
-#endif /* __MOCA_RPC_SERVER_INTERNAL_H__ */
+#endif /* __MOCHA_RPC_SERVER_INTERNAL_H__ */

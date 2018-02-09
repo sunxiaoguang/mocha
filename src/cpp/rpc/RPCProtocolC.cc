@@ -2,27 +2,27 @@
 #include "RPCProtocol.h"
 #include "RPCLite.h"
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
-struct MocaRPCProtocol : MocaRPCWrapper
+struct MochaRPCProtocol : MochaRPCWrapper
 {
   RPCProtocol protocol;
-  MocaRPCProtocolShutdown shutdown;
-  MocaRPCProtocolListener listener;
-  MocaRPCProtocolWrite write;
-  MocaRPCOpaqueData userData;
-  MocaRPCPacketEventData packet;
-  MocaRPCProtocol(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData, int32_t state);
-  ~MocaRPCProtocol();
+  MochaRPCProtocolShutdown shutdown;
+  MochaRPCProtocolListener listener;
+  MochaRPCProtocolWrite write;
+  MochaRPCOpaqueData userData;
+  MochaRPCPacketEventData packet;
+  MochaRPCProtocol(MochaRPCProtocolShutdown shutdown, MochaRPCProtocolListener listener, MochaRPCProtocolWrite write, MochaRPCOpaqueData userData, int32_t state);
+  ~MochaRPCProtocol();
   static void writeDataSink(ChainedBuffer **buffer, void *argument);
   static void eventListener(int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData);
   static void shutdownChannel(RPCOpaqueData channel);
 };
 
 void
-MocaRPCProtocol::writeDataSink(ChainedBuffer **buffer, void *argument)
+MochaRPCProtocol::writeDataSink(ChainedBuffer **buffer, void *argument)
 {
-  MocaRPCProtocol *protocol = static_cast<MocaRPCProtocol *>(argument);
+  MochaRPCProtocol *protocol = static_cast<MochaRPCProtocol *>(argument);
   ChainedBuffer *head = *buffer;
 
   while (head) {
@@ -34,12 +34,12 @@ MocaRPCProtocol::writeDataSink(ChainedBuffer **buffer, void *argument)
 }
 
 void
-MocaRPCProtocol::eventListener(int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
+MochaRPCProtocol::eventListener(int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
 {
-  MocaRPCProtocol *protocol = static_cast<MocaRPCProtocol *>(userData);
+  MochaRPCProtocol *protocol = static_cast<MochaRPCProtocol *>(userData);
   switch (eventType) {
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_REQUEST:
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_RESPONSE:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_REQUEST:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_RESPONSE:
       convert(static_cast<PacketEventData *>(eventData)->headers, protocol);
       static_cast<PacketEventData *>(eventData)->headers = reinterpret_cast<const KeyValuePairs<StringLite, StringLite> *>(protocol->headers);
       break;
@@ -50,18 +50,18 @@ MocaRPCProtocol::eventListener(int32_t eventType, RPCOpaqueData eventData, RPCOp
 }
 
 void
-MocaRPCProtocol::shutdownChannel(RPCOpaqueData argument)
+MochaRPCProtocol::shutdownChannel(RPCOpaqueData argument)
 {
-  MocaRPCProtocol *protocol = static_cast<MocaRPCProtocol *>(argument);
+  MochaRPCProtocol *protocol = static_cast<MochaRPCProtocol *>(argument);
   protocol->shutdown(protocol->userData);
 }
 
-MocaRPCOpaqueData MocaRPCProtocolUserData(MocaRPCProtocol *protocol)
+MochaRPCOpaqueData MochaRPCProtocolUserData(MochaRPCProtocol *protocol)
 {
   return protocol->userData;
 }
 
-MocaRPCProtocol::MocaRPCProtocol(MocaRPCProtocolShutdown shutdown1, MocaRPCProtocolListener listener1, MocaRPCProtocolWrite write1, MocaRPCOpaqueData userData1, int32_t state)
+MochaRPCProtocol::MochaRPCProtocol(MochaRPCProtocolShutdown shutdown1, MochaRPCProtocolListener listener1, MochaRPCProtocolWrite write1, MochaRPCOpaqueData userData1, int32_t state)
   : protocol(this, shutdownChannel, eventListener, this, writeDataSink, this, 0, 8, state), shutdown(shutdown1), listener(listener1), write(write1), userData(userData1)
 {
   refcount = 1;
@@ -72,21 +72,21 @@ MocaRPCProtocol::MocaRPCProtocol(MocaRPCProtocolShutdown shutdown1, MocaRPCProto
   memset(&empty, 0, sizeof(empty));
 }
 
-MocaRPCProtocol::~MocaRPCProtocol()
+MochaRPCProtocol::~MochaRPCProtocol()
 {
 }
 
-MocaRPCProtocol *MocaRPCProtocolCreate(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData)
+MochaRPCProtocol *MochaRPCProtocolCreate(MochaRPCProtocolShutdown shutdown, MochaRPCProtocolListener listener, MochaRPCProtocolWrite write, MochaRPCOpaqueData userData)
 {
-  return new MocaRPCProtocol(shutdown, listener, write, userData, RPCProtocol::STATE_NEGOTIATION_MAGIC);
+  return new MochaRPCProtocol(shutdown, listener, write, userData, RPCProtocol::STATE_NEGOTIATION_MAGIC);
 }
 
-MocaRPCProtocol *MocaRPCProtocolCreateNegotiated(MocaRPCProtocolShutdown shutdown, MocaRPCProtocolListener listener, MocaRPCProtocolWrite write, MocaRPCOpaqueData userData)
+MochaRPCProtocol *MochaRPCProtocolCreateNegotiated(MochaRPCProtocolShutdown shutdown, MochaRPCProtocolListener listener, MochaRPCProtocolWrite write, MochaRPCOpaqueData userData)
 {
-  return new MocaRPCProtocol(shutdown, listener, write, userData, RPCProtocol::STATE_PACKET_ID);
+  return new MochaRPCProtocol(shutdown, listener, write, userData, RPCProtocol::STATE_PACKET_ID);
 }
 
-int32_t MocaRPCProtocolRead(MocaRPCProtocol *protocol, MocaRPCOpaqueData data, int32_t size)
+int32_t MochaRPCProtocolRead(MochaRPCProtocol *protocol, MochaRPCOpaqueData data, int32_t size)
 {
   char *realData = static_cast<char *>(data);
   size_t realSize = size, total = size;
@@ -97,10 +97,10 @@ int32_t MocaRPCProtocolRead(MocaRPCProtocol *protocol, MocaRPCOpaqueData data, i
     realData += realSize;
   }
   protocol->protocol.onRead(total);
-  return MOCA_RPC_OK;
+  return MOCHA_RPC_OK;
 }
 
-int32_t MocaRPCProtocolStart(MocaRPCProtocol *protocol, const char *id, MocaRPCLogger logger, MocaRPCLogLevel level, MocaRPCOpaqueData loggerUserData, int32_t flags, int32_t limit, int32_t channelFlags)
+int32_t MochaRPCProtocolStart(MochaRPCProtocol *protocol, const char *id, MochaRPCLogger logger, MochaRPCLogLevel level, MochaRPCOpaqueData loggerUserData, int32_t flags, int32_t limit, int32_t channelFlags)
 {
   StringLite uuid;
   if (id == NULL) {
@@ -110,12 +110,12 @@ int32_t MocaRPCProtocolStart(MocaRPCProtocol *protocol, const char *id, MocaRPCL
   return protocol->protocol.init(id, reinterpret_cast<RPCLogger>(logger), static_cast<RPCLogLevel>(level), loggerUserData, flags, limit, channelFlags);
 }
 
-int32_t MocaRPCProtocolKeepAlive(MocaRPCProtocol *protocol)
+int32_t MochaRPCProtocolKeepAlive(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.keepalive();
 }
 
-int32_t MocaRPCProtocolResponse(MocaRPCProtocol *protocol, int64_t id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+int32_t MochaRPCProtocolResponse(MochaRPCProtocol *protocol, int64_t id, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmpHeaders;
@@ -126,18 +126,18 @@ int32_t MocaRPCProtocolResponse(MocaRPCProtocol *protocol, int64_t id, int32_t c
   }
 }
 
-int32_t MocaRPCProtocolRequest(MocaRPCProtocol *protocol, int64_t *id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+int32_t MochaRPCProtocolRequest(MochaRPCProtocol *protocol, int64_t *id, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
-  return MocaRPCProtocolRequest3(protocol, (*id = protocol->protocol.nextRequestId()), code, headers, payload, payloadSize);
+  return MochaRPCProtocolRequest3(protocol, (*id = protocol->protocol.nextRequestId()), code, headers, payload, payloadSize);
 }
 
-int32_t MocaRPCProtocolRequest2(MocaRPCProtocol *protocol, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+int32_t MochaRPCProtocolRequest2(MochaRPCProtocol *protocol, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
   int64_t ignored;
-  return MocaRPCProtocolRequest(protocol, &ignored, code, headers, payload, payloadSize);
+  return MochaRPCProtocolRequest(protocol, &ignored, code, headers, payload, payloadSize);
 }
 
-int32_t MocaRPCProtocolRequest3(MocaRPCProtocol *protocol, int64_t id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+int32_t MochaRPCProtocolRequest3(MochaRPCProtocol *protocol, int64_t id, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmpHeaders;
@@ -148,42 +148,42 @@ int32_t MocaRPCProtocolRequest3(MocaRPCProtocol *protocol, int64_t id, int32_t c
   }
 }
 
-int32_t MocaRPCProtocolSendNegotiation(MocaRPCProtocol *protocol)
+int32_t MochaRPCProtocolSendNegotiation(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.sendNegotiation();
 }
 
-int32_t MocaRPCProtocolIsEstablished(MocaRPCProtocol *protocol)
+int32_t MochaRPCProtocolIsEstablished(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.isEstablished();
 }
 
-int32_t MocaRPCProtocolProcessError(MocaRPCProtocol *protocol, int32_t status)
+int32_t MochaRPCProtocolProcessError(MochaRPCProtocol *protocol, int32_t status)
 {
   return protocol->protocol.processErrorHook(status);
 }
 
-int32_t MocaRPCProtocolConnected(MocaRPCProtocol *protocol)
+int32_t MochaRPCProtocolConnected(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.fireConnectedEvent();
 }
 
-const char *MocaRPCProtocolLocalId(MocaRPCProtocol *protocol)
+const char *MochaRPCProtocolLocalId(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.localId().str();
 }
 
-const char *MocaRPCProtocolRemoteId(MocaRPCProtocol *protocol)
+const char *MochaRPCProtocolRemoteId(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.remoteId().str();
 }
 
-int32_t MocaRPCProtocolPendingSize(MocaRPCProtocol *protocol)
+int32_t MochaRPCProtocolPendingSize(MochaRPCProtocol *protocol)
 {
   return protocol->protocol.pendingSize();
 }
 
-void MocaRPCProtocolDestroy(MocaRPCProtocol *protocol)
+void MochaRPCProtocolDestroy(MochaRPCProtocol *protocol)
 {
   delete protocol;
 }

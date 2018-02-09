@@ -1,6 +1,6 @@
 #include "RPCThreadPool.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 RPCThreadPool::RPCThreadPool(RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData)
   : size_(0), workers_(NULL), counter_(0), running_(true), asyncQueue_(logger, level, userData)
@@ -19,7 +19,7 @@ RPCThreadPool::init(int32_t size)
   asyncQueue_.init(size, 1024);
   workers_ = new RPCWorker[size_];
   for (int32_t idx = 0; idx < size_; ++idx) {
-    if (MOCA_RPC_FAILED(st = initWorker(idx, worker(idx)))) {
+    if (MOCHA_RPC_FAILED(st = initWorker(idx, worker(idx)))) {
       return st;
     }
   }
@@ -81,7 +81,7 @@ RPCThreadPool::initWorker(int32_t id, RPCWorker *worker)
   worker->id = id;
   worker->asyncQueue = &asyncQueue_;
   new (&worker->thread) RPCThread(workerEntry, worker);
-  if (MOCA_RPC_FAILED(worker->thread.start())) {
+  if (MOCHA_RPC_FAILED(worker->thread.start())) {
     return RPC_INTERNAL_ERROR;
   }
   worker->flags |= THREAD_INITIALIZED;
@@ -120,4 +120,4 @@ RPCThreadPool::shutdown()
   return RPC_OK;
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

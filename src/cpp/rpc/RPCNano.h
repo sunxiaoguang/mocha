@@ -1,12 +1,12 @@
-#ifndef __MOCA_RPC_NANO_INTERNAL_H__
-#define __MOCA_RPC_NANO_INTERNAL_H__ 1
-#include "moca/rpc/RPC.h"
+#ifndef __MOCHA_RPC_NANO_INTERNAL_H__
+#define __MOCHA_RPC_NANO_INTERNAL_H__ 1
+#include "mocha/rpc/RPC.h"
 #include "RPCLogging.h"
 #include <time.h>
 #include <sys/socket.h>
 #include <stdio.h>
 
-#ifdef MOCA_RPC_NANO
+#ifdef MOCHA_RPC_NANO
 #include <pthread.h>
 #endif
 
@@ -25,12 +25,12 @@
 #define SECOND (1000000)
 
 #define OFFSET_OF(TYPE, FIELD) (((size_t)(&((TYPE *) sizeof(TYPE))->FIELD)) - sizeof(TYPE))
-#define CHAINED_BUFFER_SIZE(size) MOCA_RPC_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
+#define CHAINED_BUFFER_SIZE(size) MOCHA_RPC_ALIGN(size + OFFSET_OF(ChainedBuffer, buffer), 8)
 
 #define RPC_MEMORY_BARRIER_FULL __sync_synchronize
 #define RPC_NOT_USED(V) ((void) V)
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 class RPCMutex : private RPCNonCopyable
 {
 private:
@@ -114,11 +114,11 @@ public:
   bool operator==(const RPCThread &rhs) const;
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
 #include "RPCAtomic.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 static const size_t MAX_INT32 = 0x7FFFFFFF;
 /* magic code is MOCA in ascii */
 static const uint32_t MAGIC_CODE = 0X4D4F4341;
@@ -267,11 +267,11 @@ void uuidGenerate(StringLite *output);
 
 int32_t getInetAddressPresentation(const sockaddr_storage *addr, StringLite *localAddress, uint16_t *port);
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
-typedef void (*MocaRPCKeyValuePairsWrapToInternalSink)(int32_t index, MocaRPCKeyValuePair *pair, void *userData);
+typedef void (*MochaRPCKeyValuePairsWrapToInternalSink)(int32_t index, MochaRPCKeyValuePair *pair, void *userData);
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsWrapToInternal(int32_t size, MocaRPCKeyValuePairsWrapToInternalSink sink, void *sinkUserData, MocaRPCKeyValuePairs *to);
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsWrapToInternal(int32_t size, MochaRPCKeyValuePairsWrapToInternalSink sink, void *sinkUserData, MochaRPCKeyValuePairs *to);
 
 #endif

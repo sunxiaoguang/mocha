@@ -1,9 +1,9 @@
-#ifndef __MOCA_RPC_DISPATCHER_INTERNAL_H_listener_
-#define __MOCA_RPC_DISPATCHER_INTERNAL_H__ 1
-#include "moca/rpc/RPCDispatcher.h"
+#ifndef __MOCHA_RPC_DISPATCHER_INTERNAL_H_listener_
+#define __MOCHA_RPC_DISPATCHER_INTERNAL_H__ 1
+#include "mocha/rpc/RPCDispatcher.h"
 #include "RPCThreadPool.h"
 #include "RPC.h"
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCDispatcherBuilder : private RPCNonCopyable
 {
@@ -165,5 +165,5 @@ public:
   RPCDispatcherThread *wrap();
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 #endif

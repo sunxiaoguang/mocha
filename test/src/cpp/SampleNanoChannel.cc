@@ -1,11 +1,11 @@
 #define __STDC_FORMAT_MACROS
-#include <moca/rpc/RPCChannelNano.h>
+#include <mocha/rpc/RPCChannelNano.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <pthread.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 RPCChannelNano *client;
 

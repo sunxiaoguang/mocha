@@ -8,14 +8,14 @@ CPPFLAGS +=
 CXXFLAGS += -std=c++11
 LDFLAGS += -std=c++11
 
-CPPFLAGS += -DMOCA_RPC_FULL
+CPPFLAGS += -DMOCHA_RPC_FULL
 CPPSRCS += RPCProtocol.cc RPCChannelNano.cc RPCChannelEasy.cc RPCLogging.cc RPC.cc RPCLite.cc RPCNano.cc RPCChannel.cc \
 	RPCClientChannel.cc RPCServerChannel.cc RPCDispatcher.cc RPCProtocolC.cc \
 	RPCChannelC.cc RPCDispatcherC.cc  RPCServer.cc RPCServerC.cc RPCThreadPool.cc
 INCLUDE_DIRS += ../include $(LIBUV_ROOT)/include
 
-SOTARGET = MocaRPC
-LIB_NAME = MocaRPC
+SOTARGET = MochaRPC
+LIB_NAME = MochaRPC
 
 DEPLIBS += z dl
 

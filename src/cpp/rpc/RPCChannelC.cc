@@ -1,28 +1,28 @@
 #include "RPCChannelC.h"
 
-struct MocaRPCChannelBuilder
+struct MochaRPCChannelBuilder
 {
   RPCChannel::Builder *impl;
-  MocaRPCChannel *channel;
+  MochaRPCChannel *channel;
 };
 
-static void MocaRPCEventListenerAdapter(RPCChannel *channel, int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
+static void MochaRPCEventListenerAdapter(RPCChannel *channel, int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
 {
-  MocaRPCChannel *wrapper = static_cast<MocaRPCChannel *>(userData);
-  MocaRPCChannel *attachment = static_cast<MocaRPCChannel *>(channel->attachment());
+  MochaRPCChannel *wrapper = static_cast<MochaRPCChannel *>(userData);
+  MochaRPCChannel *attachment = static_cast<MochaRPCChannel *>(channel->attachment());
   switch (eventType) {
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_CREATED:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_CREATED:
       if (attachment == NULL) {
-        channel->attachment((attachment = static_cast<MocaRPCChannel *>(calloc(1, sizeof(MocaRPCChannel)))), NULL);
+        channel->attachment((attachment = static_cast<MochaRPCChannel *>(calloc(1, sizeof(MochaRPCChannel)))), NULL);
       }
       wrapper->refcount++;
       attachment->impl = channel;
-      if (wrapper->eventMask & MOCA_RPC_EVENT_TYPE_CHANNEL_CREATED) {
+      if (wrapper->eventMask & MOCHA_RPC_EVENT_TYPE_CHANNEL_CREATED) {
         wrapper->listener(attachment, eventType, eventData, wrapper->userData);
       }
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_DESTROYED:
-      if (wrapper->eventMask & MOCA_RPC_EVENT_TYPE_CHANNEL_DESTROYED) {
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_DESTROYED:
+      if (wrapper->eventMask & MOCHA_RPC_EVENT_TYPE_CHANNEL_DESTROYED) {
         wrapper->listener(attachment, eventType, eventData, wrapper->userData);
       }
       if (attachment != wrapper) {
@@ -32,9 +32,9 @@ static void MocaRPCEventListenerAdapter(RPCChannel *channel, int32_t eventType, 
         destroy(wrapper);
       }
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_REQUEST:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_REQUEST:
       /* FALL THROUGH */
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_RESPONSE:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_RESPONSE:
       {
         PacketEventData *packet = static_cast<PacketEventData *>(eventData);
         convert(packet->headers, wrapper);
@@ -47,11 +47,11 @@ static void MocaRPCEventListenerAdapter(RPCChannel *channel, int32_t eventType, 
   }
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderCreate(void)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderCreate(void)
 {
-  MocaRPCChannel *channel = static_cast<MocaRPCChannel *>(calloc(1, sizeof(MocaRPCChannel)));
-  MocaRPCChannelBuilder *builder = static_cast<MocaRPCChannelBuilder *>(calloc(1, sizeof(MocaRPCChannelBuilder)));
+  MochaRPCChannel *channel = static_cast<MochaRPCChannel *>(calloc(1, sizeof(MochaRPCChannel)));
+  MochaRPCChannelBuilder *builder = static_cast<MochaRPCChannelBuilder *>(calloc(1, sizeof(MochaRPCChannelBuilder)));
   if (channel == NULL || builder == NULL) {
     goto cleanupExit;
   }
@@ -68,105 +68,105 @@ cleanupExit:
   return NULL;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderBind(MocaRPCChannelBuilder *builder, const char *address)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderBind(MochaRPCChannelBuilder *builder, const char *address)
 {
   builder->impl->bind(address);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderConnect(MocaRPCChannelBuilder *builder, const char *address)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderConnect(MochaRPCChannelBuilder *builder, const char *address)
 {
   builder->impl->connect(address);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderTimeout(MocaRPCChannelBuilder *builder, int64_t timeout)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderTimeout(MochaRPCChannelBuilder *builder, int64_t timeout)
 {
   builder->impl->timeout(timeout);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderLimit(MocaRPCChannelBuilder *builder, int32_t size)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderLimit(MochaRPCChannelBuilder *builder, int32_t size)
 {
   builder->impl->limit(size);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderListener(MocaRPCChannelBuilder *builder, MocaRPCEventListener listener, MocaRPCOpaqueData userData, int32_t eventMask)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderListener(MochaRPCChannelBuilder *builder, MochaRPCEventListener listener, MochaRPCOpaqueData userData, int32_t eventMask)
 {
   builder->channel->listener = listener;
   builder->channel->userData = userData;
   builder->channel->eventMask = eventMask;
-  builder->impl->listener(MocaRPCEventListenerAdapter, builder->channel, eventMask | MOCA_RPC_EVENT_TYPE_CHANNEL_CREATED | MOCA_RPC_EVENT_TYPE_CHANNEL_DESTROYED);
+  builder->impl->listener(MochaRPCEventListenerAdapter, builder->channel, eventMask | MOCHA_RPC_EVENT_TYPE_CHANNEL_CREATED | MOCHA_RPC_EVENT_TYPE_CHANNEL_DESTROYED);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderKeepalive(MocaRPCChannelBuilder *builder, int64_t interval)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderKeepalive(MochaRPCChannelBuilder *builder, int64_t interval)
 {
   builder->impl->keepalive(interval);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderId(MocaRPCChannelBuilder *builder, const char *id)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderId(MochaRPCChannelBuilder *builder, const char *id)
 {
   builder->impl->id(id);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderLogger(MocaRPCChannelBuilder *builder, MocaRPCLogger logger, MocaRPCLogLevel level, MocaRPCOpaqueData userData)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderLogger(MochaRPCChannelBuilder *builder, MochaRPCLogger logger, MochaRPCLogLevel level, MochaRPCOpaqueData userData)
 {
   builder->impl->logger(reinterpret_cast<RPCLogger>(logger), static_cast<RPCLogLevel>(level), userData);
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderDispatcher(MocaRPCChannelBuilder *builder, MocaRPCDispatcher *dispatcher)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderDispatcher(MochaRPCChannelBuilder *builder, MochaRPCDispatcher *dispatcher)
 {
   builder->impl->dispatcher(reinterpret_cast<RPCDispatcher *>(dispatcher));
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderAttachment(MocaRPCChannelBuilder *builder, MocaRPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderAttachment(MochaRPCChannelBuilder *builder, MochaRPCOpaqueData attachment, RPCOpaqueDataDestructor attachmentDestructor)
 {
   builder->channel->attachment = attachment;
   builder->channel->attachmentDestructor = attachmentDestructor;
   return builder;
 }
 
-MocaRPCChannelBuilder *
-MocaRPCChannelBuilderFlags(MocaRPCChannelBuilder *builder, int32_t flags)
+MochaRPCChannelBuilder *
+MochaRPCChannelBuilderFlags(MochaRPCChannelBuilder *builder, int32_t flags)
 {
   builder->impl->flags(flags);
   return builder;
 }
 
 int32_t
-MocaRPCChannelBuilderBuild(MocaRPCChannelBuilder *builder, MocaRPCChannel **channel)
+MochaRPCChannelBuilderBuild(MochaRPCChannelBuilder *builder, MochaRPCChannel **channel)
 {
   builder->channel->impl = builder->impl->build();
 
   int32_t st;
   if (builder->channel->impl == NULL) {
-    st = MOCA_RPC_INTERNAL_ERROR;
+    st = MOCHA_RPC_INTERNAL_ERROR;
   } else {
-    st = MOCA_RPC_OK;
+    st = MOCHA_RPC_OK;
   }
   *channel = builder->channel;
-  builder->channel = static_cast<MocaRPCChannel *>(calloc(1, sizeof(MocaRPCChannel)));
+  builder->channel = static_cast<MochaRPCChannel *>(calloc(1, sizeof(MochaRPCChannel)));
   return st;
 }
 
 void
-MocaRPCChannelBuilderDestroy(MocaRPCChannelBuilder *builder)
+MochaRPCChannelBuilderDestroy(MochaRPCChannelBuilder *builder)
 {
   delete builder->impl;
   destroy(builder->channel);
@@ -174,29 +174,29 @@ MocaRPCChannelBuilderDestroy(MocaRPCChannelBuilder *builder)
 }
 
 void
-MocaRPCChannelAddRef(MocaRPCChannel *channel)
+MochaRPCChannelAddRef(MochaRPCChannel *channel)
 {
   channel->impl->addRef();
 }
 
 int32_t
-MocaRPCChannelRelease(MocaRPCChannel *channel)
+MochaRPCChannelRelease(MochaRPCChannel *channel)
 {
   return channel->impl->release();
 }
 
 void
-MocaRPCChannelClose(MocaRPCChannel *channel)
+MochaRPCChannelClose(MochaRPCChannel *channel)
 {
   channel->impl->close();
 }
 
 int32_t
-MocaRPCChannelLocalAddress(MocaRPCChannel *channel, char **localAddress, uint16_t *port)
+MochaRPCChannelLocalAddress(MochaRPCChannel *channel, char **localAddress, uint16_t *port)
 {
   StringLite tmp;
   int32_t st = channel->impl->localAddress(&tmp, port);
-  if (st == MOCA_RPC_OK) {
+  if (st == MOCHA_RPC_OK) {
     size_t size;
     tmp.release(localAddress, &size);
   }
@@ -204,11 +204,11 @@ MocaRPCChannelLocalAddress(MocaRPCChannel *channel, char **localAddress, uint16_
 }
 
 int32_t
-MocaRPCChannelRemoteAddress(MocaRPCChannel *channel, char **remoteAddress, uint16_t *port)
+MochaRPCChannelRemoteAddress(MochaRPCChannel *channel, char **remoteAddress, uint16_t *port)
 {
   StringLite tmp;
   int32_t st = channel->impl->remoteAddress(&tmp, port);
-  if (st == MOCA_RPC_OK) {
+  if (st == MOCHA_RPC_OK) {
     size_t size;
     tmp.release(remoteAddress, &size);
   }
@@ -216,11 +216,11 @@ MocaRPCChannelRemoteAddress(MocaRPCChannel *channel, char **remoteAddress, uint1
 }
 
 int32_t
-MocaRPCChannelLocalId(MocaRPCChannel *channel, char **localId)
+MochaRPCChannelLocalId(MochaRPCChannel *channel, char **localId)
 {
   StringLite tmp;
   int32_t st = channel->impl->localId(&tmp);
-  if (st == MOCA_RPC_OK) {
+  if (st == MOCHA_RPC_OK) {
     size_t size;
     tmp.release(localId, &size);
   }
@@ -228,11 +228,11 @@ MocaRPCChannelLocalId(MocaRPCChannel *channel, char **localId)
 }
 
 int32_t
-MocaRPCChannelRemoteId(MocaRPCChannel *channel, char **remoteId)
+MochaRPCChannelRemoteId(MochaRPCChannel *channel, char **remoteId)
 {
   StringLite tmp;
   int32_t st = channel->impl->remoteId(&tmp);
-  if (st == MOCA_RPC_OK) {
+  if (st == MOCHA_RPC_OK) {
     size_t size;
     tmp.release(remoteId, &size);
   }
@@ -240,7 +240,7 @@ MocaRPCChannelRemoteId(MocaRPCChannel *channel, char **remoteId)
 }
 
 int32_t
-MocaRPCChannelResponse(MocaRPCChannel *channel, int64_t id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+MochaRPCChannelResponse(MochaRPCChannel *channel, int64_t id, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmpHeaders;
@@ -252,7 +252,7 @@ MocaRPCChannelResponse(MocaRPCChannel *channel, int64_t id, int32_t code, const 
 }
 
 int32_t
-MocaRPCChannelRequest(MocaRPCChannel *channel, int64_t *id, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+MochaRPCChannelRequest(MochaRPCChannel *channel, int64_t *id, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
   if (headers) {
     KeyValuePairs<StringLite, StringLite> tmpHeaders;
@@ -264,21 +264,21 @@ MocaRPCChannelRequest(MocaRPCChannel *channel, int64_t *id, int32_t code, const 
 }
 
 int32_t
-MocaRPCChannelRequest2(MocaRPCChannel *channel, int32_t code, const MocaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
+MochaRPCChannelRequest2(MochaRPCChannel *channel, int32_t code, const MochaRPCKeyValuePairs *headers, const void *payload, size_t payloadSize)
 {
   int64_t discarded;
-  return MocaRPCChannelRequest(channel, &discarded, code, headers, payload, payloadSize);
+  return MochaRPCChannelRequest(channel, &discarded, code, headers, payload, payloadSize);
 }
 
-void MocaRPCChannelSetAttachment(MocaRPCChannel *channel, MocaRPCOpaqueData attachment, MocaRPCOpaqueDataDestructor destructor)
+void MochaRPCChannelSetAttachment(MochaRPCChannel *channel, MochaRPCOpaqueData attachment, MochaRPCOpaqueDataDestructor destructor)
 {
   destroyAttachment(channel);
   channel->attachment = attachment;
   channel->attachmentDestructor = destructor;
 }
 
-MocaRPCOpaqueData
-MocaRPCChannelGetAttachment(MocaRPCChannel *channel)
+MochaRPCOpaqueData
+MochaRPCChannelGetAttachment(MochaRPCChannel *channel)
 {
   return channel->attachment;
 }

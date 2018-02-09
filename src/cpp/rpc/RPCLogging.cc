@@ -6,7 +6,7 @@
 
 #define MAX_LOG_LINE_SIZE (4096)
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 void simpleLogger(RPCLogLevel level, RPCOpaqueData userData, const char *func, const char *file, uint32_t line, const char *fmt, va_list args)
 {
@@ -33,11 +33,11 @@ void rpcSimpleLogger(RPCLogLevel level, RPCOpaqueData userData, const char *func
   va_end(args);
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
-void MocaRPCSimpleLogger(MocaRPCLogLevel level, MocaRPCOpaqueData userData, const char *func, const char *file, uint32_t line, const char *fmt, ...)
+void MochaRPCSimpleLogger(MochaRPCLogLevel level, MochaRPCOpaqueData userData, const char *func, const char *file, uint32_t line, const char *fmt, ...)
 {
   va_list args;
   va_start(args, fmt);
@@ -45,7 +45,7 @@ void MocaRPCSimpleLogger(MocaRPCLogLevel level, MocaRPCOpaqueData userData, cons
   va_end(args);
 }
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 void stdoutSink(RPCLogLevel level, RPCOpaqueData userData, const char *func, const char *file, uint32_t line, const char *message)
 {
@@ -71,4 +71,4 @@ void rpcLogger(RPCLogger defaultLogger, RPCLogLevel defaultLoggerLevel, RPCOpaqu
   RPC_MEMORY_BARRIER_FULL();
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

@@ -1,11 +1,11 @@
-#ifndef __MOCA_RPC_INTERNAL_H__
-#define __MOCA_RPC_INTERNAL_H__ 1
-#include <moca/rpc/RPCDecl.h>
+#ifndef __MOCHA_RPC_INTERNAL_H__
+#define __MOCHA_RPC_INTERNAL_H__ 1
+#include <mocha/rpc/RPCDecl.h>
 
 #include "RPCLite.h"
-#if !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_NANO)
 #include <uv.h>
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 class RPCCompletionToken
 {
 private:
@@ -47,7 +47,7 @@ public:
     return asyncStatus_;
   }
 };
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 #endif
 
 #endif

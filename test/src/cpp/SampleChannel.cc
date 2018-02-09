@@ -1,11 +1,11 @@
-#include <moca/rpc/RPCChannel.h>
-#include <moca/rpc/RPCDispatcher.h>
+#include <mocha/rpc/RPCChannel.h>
+#include <mocha/rpc/RPCDispatcher.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
 #include <thread>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 #ifdef __DARWIN__
 #define INT64_FMT "%lld"

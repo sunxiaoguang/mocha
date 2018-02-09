@@ -1,11 +1,11 @@
 #define __STDC_FORMAT_MACROS
-#include <moca/rpc/RPCChannelEasy.h>
+#include <mocha/rpc/RPCChannelEasy.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <pthread.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 void print(int64_t id, int32_t code, const KeyValuePairs<StringLite, StringLite> *headers, const void *payload, size_t payloadSize, bool response)
 {

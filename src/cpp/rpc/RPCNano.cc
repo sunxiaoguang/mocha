@@ -1,16 +1,16 @@
-#include "moca/rpc-c/RPC.h"
+#include "mocha/rpc-c/RPC.h"
 #include "RPCNano.h"
 #include <stdio.h>
 #include <arpa/inet.h>
 #include <pthread.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 void
 StringLite::resize(size_t size)
 {
   if (size_ < size) {
     if (capacity_ < size + 1) {
-      capacity_ += MOCA_RPC_ALIGN(size + 1, 8);
+      capacity_ += MOCHA_RPC_ALIGN(size + 1, 8);
       content_ = static_cast<char *>(realloc(content_, capacity_));
     }
     memset(content_ + size_, ' ', size - size_);
@@ -57,7 +57,7 @@ void
 StringLite::append(const char *str, size_t len)
 {
   if (capacity_ < size_ + len + 1) {
-    capacity_ += MOCA_RPC_ALIGN(size_ + len + 1, 8);
+    capacity_ += MOCHA_RPC_ALIGN(size_ + len + 1, 8);
     content_ = static_cast<char *>(realloc(content_, capacity_));
   }
   memcpy(content_ + size_, str, len);
@@ -70,7 +70,7 @@ StringLite::assign(const char *str, size_t len)
 {
   if (capacity_ < len + 1 || (content_ && capacity_ > len + 16) || content_ == NULL) {
     free(content_);
-    capacity_ = MOCA_RPC_ALIGN(len + 1, 8);
+    capacity_ = MOCHA_RPC_ALIGN(len + 1, 8);
     content_ = static_cast<char *>(malloc(capacity_));
   }
   memcpy(content_, str, len);
@@ -272,81 +272,81 @@ bool RPCThread::operator==(const RPCThread &rhs) const
   return pthread_equal(thread_, rhs.thread_);
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
-const char *MocaRPCErrorString(int32_t code)
+const char *MochaRPCErrorString(int32_t code)
 {
   switch (code) {
-    case MOCA_RPC_OK:
+    case MOCHA_RPC_OK:
       return "Ok";
-    case MOCA_RPC_INVALID_ARGUMENT:
+    case MOCHA_RPC_INVALID_ARGUMENT:
       return "Invalid argument";
-    case MOCA_RPC_CORRUPTED_DATA:
+    case MOCHA_RPC_CORRUPTED_DATA:
       return "Corrupted data";
-    case MOCA_RPC_OUT_OF_MEMORY:
+    case MOCHA_RPC_OUT_OF_MEMORY:
       return "Running out of memory";
-    case MOCA_RPC_CAN_NOT_CONNECT:
+    case MOCHA_RPC_CAN_NOT_CONNECT:
       return "Can not connect to remote server";
-    case MOCA_RPC_NO_ACCESS:
+    case MOCHA_RPC_NO_ACCESS:
       return "No access";
-    case MOCA_RPC_NOT_SUPPORTED:
+    case MOCHA_RPC_NOT_SUPPORTED:
       return "Not supported";
-    case MOCA_RPC_TOO_MANY_OPEN_FILE:
+    case MOCHA_RPC_TOO_MANY_OPEN_FILE:
       return "Too many open files";
-    case MOCA_RPC_INSUFFICIENT_RESOURCE:
+    case MOCHA_RPC_INSUFFICIENT_RESOURCE:
       return "Insufficient resource";
-    case MOCA_RPC_INTERNAL_ERROR:
+    case MOCHA_RPC_INTERNAL_ERROR:
       return "Internal error";
-    case MOCA_RPC_ILLEGAL_STATE:
+    case MOCHA_RPC_ILLEGAL_STATE:
       return "Illegal state";
-    case MOCA_RPC_TIMEOUT:
+    case MOCHA_RPC_TIMEOUT:
       return "Socket timeout";
-    case MOCA_RPC_DISCONNECTED:
+    case MOCHA_RPC_DISCONNECTED:
       return "Disconnected";
-    case MOCA_RPC_WOULDBLOCK:
+    case MOCHA_RPC_WOULDBLOCK:
       return "Operation would block";
-    case MOCA_RPC_INCOMPATIBLE_PROTOCOL:
+    case MOCHA_RPC_INCOMPATIBLE_PROTOCOL:
       return "Incompatible protocol";
-    case MOCA_RPC_CAN_NOT_BIND:
+    case MOCHA_RPC_CAN_NOT_BIND:
       return "Can not bind socket to given name";
-    case MOCA_RPC_BUFFER_OVERFLOW:
+    case MOCHA_RPC_BUFFER_OVERFLOW:
       return "Running out of buffer";
     default:
       return "Unknown Error";
   }
 }
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
-#define MOCA_RPC_STRING_SIZE(len) (len + OFFSET_OF(MocaRPCString, content) + 1)
-#define MOCA_RPC_KEY_VALUE_PAIR_SIZE(klen, vlen) (MOCA_RPC_STRING_SIZE(klen) + MOCA_RPC_STRING_SIZE(vlen) + OFFSET_OF(MocaRPCKeyValuePair, extra))
+#define MOCHA_RPC_STRING_SIZE(len) (len + OFFSET_OF(MochaRPCString, content) + 1)
+#define MOCHA_RPC_KEY_VALUE_PAIR_SIZE(klen, vlen) (MOCHA_RPC_STRING_SIZE(klen) + MOCHA_RPC_STRING_SIZE(vlen) + OFFSET_OF(MochaRPCKeyValuePair, extra))
 
-MocaRPCString *
-convert(const char *str, int32_t len, MocaRPCString *output)
+MochaRPCString *
+convert(const char *str, int32_t len, MochaRPCString *output)
 {
   memcpy(output->content.buffer, str, len);
   output->content.buffer[len] = '\0';
-  output->flags = MOCA_RPC_STRING_FLAG_EMBEDDED;
-  MOCA_SAFE_POINTER_WRITE(len, &output->size, int32_t);
+  output->flags = MOCHA_RPC_STRING_FLAG_EMBEDDED;
+  MOCHA_SAFE_POINTER_WRITE(len, &output->size, int32_t);
   return output;
 }
 
-MocaRPCString *
-MocaRPCStringCreate(const char *str, int32_t len)
+MochaRPCString *
+MochaRPCStringCreate(const char *str, int32_t len)
 {
-  size_t realSize = MOCA_RPC_STRING_SIZE(len);
-  return convert(str, len, static_cast<MocaRPCString *>(malloc(realSize)));
+  size_t realSize = MOCHA_RPC_STRING_SIZE(len);
+  return convert(str, len, static_cast<MochaRPCString *>(malloc(realSize)));
 }
 
-MocaRPCString *
-MocaRPCStringCreate2(const char *str)
+MochaRPCString *
+MochaRPCStringCreate2(const char *str)
 {
   /* we don't want to support huge string longer than 2GB */
-  return MocaRPCStringCreate(str, static_cast<int32_t>(strlen(str)));
+  return MochaRPCStringCreate(str, static_cast<int32_t>(strlen(str)));
 }
 
-MocaRPCString *
-MocaRPCStringWrapTo(const char *str, int32_t length, MocaRPCString *to)
+MochaRPCString *
+MochaRPCStringWrapTo(const char *str, int32_t length, MochaRPCString *to)
 {
   to->size = length;
   to->flags = 0;
@@ -354,127 +354,127 @@ MocaRPCStringWrapTo(const char *str, int32_t length, MocaRPCString *to)
   return to;
 }
 
-MocaRPCString *
-MocaRPCStringWrapTo2(const char *str, MocaRPCString *to)
+MochaRPCString *
+MochaRPCStringWrapTo2(const char *str, MochaRPCString *to)
 {
-  return MocaRPCStringWrapTo(str, static_cast<int32_t>(strlen(str)), to);
+  return MochaRPCStringWrapTo(str, static_cast<int32_t>(strlen(str)), to);
 }
 
-MocaRPCString *
-MocaRPCStringWrap(const char *str, int32_t length)
+MochaRPCString *
+MochaRPCStringWrap(const char *str, int32_t length)
 {
-  return MocaRPCStringWrapTo(str, length, static_cast<MocaRPCString *>(malloc(sizeof(MocaRPCString))));
+  return MochaRPCStringWrapTo(str, length, static_cast<MochaRPCString *>(malloc(sizeof(MochaRPCString))));
 }
 
-MocaRPCString *
-MocaRPCStringWrap2(const char *str)
+MochaRPCString *
+MochaRPCStringWrap2(const char *str)
 {
   /* we don't want to support huge string longer than 2GB */
-  return MocaRPCStringWrap(str, static_cast<int32_t>(strlen(str)));
+  return MochaRPCStringWrap(str, static_cast<int32_t>(strlen(str)));
 }
 
 void
-MocaRPCStringDestroy(MocaRPCString *string)
+MochaRPCStringDestroy(MochaRPCString *string)
 {
   free(string);
 }
 
 const char *
-MocaRPCStringGet(const MocaRPCString *str)
+MochaRPCStringGet(const MochaRPCString *str)
 {
-  if (str->flags & MOCA_RPC_STRING_FLAG_EMBEDDED) {
+  if (str->flags & MOCHA_RPC_STRING_FLAG_EMBEDDED) {
     return str->content.buffer;
   } else {
     return str->content.ptr;
   }
 }
 
-MocaRPCKeyValuePair *
-convert(const char *key, int32_t keyLen, const char *value, int32_t valueLen, MocaRPCKeyValuePair *pair)
+MochaRPCKeyValuePair *
+convert(const char *key, int32_t keyLen, const char *value, int32_t valueLen, MochaRPCKeyValuePair *pair)
 {
-  size_t keySize = MOCA_RPC_STRING_SIZE(keyLen);
-  pair->key = unsafeGet<MocaRPCString>(pair->extra, 0);
-  pair->value = unsafeGet<MocaRPCString>(pair->extra, keySize);
+  size_t keySize = MOCHA_RPC_STRING_SIZE(keyLen);
+  pair->key = unsafeGet<MochaRPCString>(pair->extra, 0);
+  pair->value = unsafeGet<MochaRPCString>(pair->extra, keySize);
   convert(key, keyLen, pair->key);
   convert(value, valueLen, pair->value);
   return pair;
 }
 
-MocaRPCKeyValuePair *
-MocaRPCKeyValuePairCreate(const char *key, int32_t keyLen, const char *value, int32_t valueLen)
+MochaRPCKeyValuePair *
+MochaRPCKeyValuePairCreate(const char *key, int32_t keyLen, const char *value, int32_t valueLen)
 {
-  size_t realSize = MOCA_RPC_KEY_VALUE_PAIR_SIZE(keyLen, valueLen);
-  return convert(key, keyLen, value, valueLen, static_cast<MocaRPCKeyValuePair *>(malloc(realSize)));
+  size_t realSize = MOCHA_RPC_KEY_VALUE_PAIR_SIZE(keyLen, valueLen);
+  return convert(key, keyLen, value, valueLen, static_cast<MochaRPCKeyValuePair *>(malloc(realSize)));
 }
 
-MocaRPCKeyValuePair *
-MocaRPCKeyValuePairCreate2(const char *key, const char *value)
+MochaRPCKeyValuePair *
+MochaRPCKeyValuePairCreate2(const char *key, const char *value)
 {
-  return MocaRPCKeyValuePairCreate(key, static_cast<int32_t>(strlen(key)), value, static_cast<int32_t>(strlen(value)));
+  return MochaRPCKeyValuePairCreate(key, static_cast<int32_t>(strlen(key)), value, static_cast<int32_t>(strlen(value)));
 }
 
-MocaRPCKeyValuePair *
-MocaRPCKeyValuePairWrapTo(const char *key, int32_t keyLen, const char *value, int32_t valueLen, MocaRPCKeyValuePair *to)
+MochaRPCKeyValuePair *
+MochaRPCKeyValuePairWrapTo(const char *key, int32_t keyLen, const char *value, int32_t valueLen, MochaRPCKeyValuePair *to)
 {
-  MocaRPCStringWrapTo(key, keyLen, to->key);
-  MocaRPCStringWrapTo(value, valueLen, to->value);
+  MochaRPCStringWrapTo(key, keyLen, to->key);
+  MochaRPCStringWrapTo(value, valueLen, to->value);
   return to;
 }
 
-MocaRPCKeyValuePair *
-MocaRPCKeyValuePairWrap(const char *key, int32_t keyLen, const char *value, int32_t valueLen)
+MochaRPCKeyValuePair *
+MochaRPCKeyValuePairWrap(const char *key, int32_t keyLen, const char *value, int32_t valueLen)
 {
-  MocaRPCKeyValuePair *pair = static_cast<MocaRPCKeyValuePair *>(malloc(MOCA_RPC_KEY_VALUE_PAIR_SIZE(sizeof(void *), sizeof(void *))));
-  pair->key = unsafeGet<MocaRPCString>(pair->extra, 0);
-  pair->value = unsafeGet<MocaRPCString>(pair->extra, MOCA_RPC_STRING_SIZE(sizeof(void*)));
-  return MocaRPCKeyValuePairWrapTo(key, keyLen, value, valueLen, pair);
+  MochaRPCKeyValuePair *pair = static_cast<MochaRPCKeyValuePair *>(malloc(MOCHA_RPC_KEY_VALUE_PAIR_SIZE(sizeof(void *), sizeof(void *))));
+  pair->key = unsafeGet<MochaRPCString>(pair->extra, 0);
+  pair->value = unsafeGet<MochaRPCString>(pair->extra, MOCHA_RPC_STRING_SIZE(sizeof(void*)));
+  return MochaRPCKeyValuePairWrapTo(key, keyLen, value, valueLen, pair);
 }
 
-MocaRPCKeyValuePair *
-MocaRPCKeyValuePairWrap2(const char *key, const char *value)
+MochaRPCKeyValuePair *
+MochaRPCKeyValuePairWrap2(const char *key, const char *value)
 {
-  return MocaRPCKeyValuePairWrap(key, static_cast<int32_t>(strlen(key)), value, static_cast<int32_t>(strlen(value)));
+  return MochaRPCKeyValuePairWrap(key, static_cast<int32_t>(strlen(key)), value, static_cast<int32_t>(strlen(value)));
 }
 
 void
-MocaRPCKeyValuePairDestroy(MocaRPCKeyValuePair *pair)
+MochaRPCKeyValuePairDestroy(MochaRPCKeyValuePair *pair)
 {
   free(pair);
 }
 
-MocaRPCKeyValuePairs *
-convert(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize, MocaRPCKeyValuePairs *pairs)
+MochaRPCKeyValuePairs *
+convert(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize, MochaRPCKeyValuePairs *pairs)
 {
-  MOCA_SAFE_POINTER_WRITE(size, &pairs->size, int32_t);
-  pairs->pair = unsafeGet<MocaRPCKeyValuePair *>(pairs->extra, 0);
-  size_t offset = size * sizeof(MocaRPCKeyValuePair *);
+  MOCHA_SAFE_POINTER_WRITE(size, &pairs->size, int32_t);
+  pairs->pair = unsafeGet<MochaRPCKeyValuePair *>(pairs->extra, 0);
+  size_t offset = size * sizeof(MochaRPCKeyValuePair *);
   for (int32_t idx = 0; idx < size; ++idx) {
     int32_t keyLen = keysSize[idx];
     int32_t valueLen = valuesSize[idx];
-    int32_t pairSize = MOCA_RPC_KEY_VALUE_PAIR_SIZE(keyLen, valueLen);
-    MocaRPCKeyValuePair *pair = unsafeGet<MocaRPCKeyValuePair>(pairs->extra, offset);
+    int32_t pairSize = MOCHA_RPC_KEY_VALUE_PAIR_SIZE(keyLen, valueLen);
+    MochaRPCKeyValuePair *pair = unsafeGet<MochaRPCKeyValuePair>(pairs->extra, offset);
     convert(keys[idx], keyLen, values[idx], valueLen, pair);
     offset += pairSize;
-    MOCA_SAFE_POINTER_WRITE(pair, pairs->pair + idx, MocaRPCKeyValuePair *);
+    MOCHA_SAFE_POINTER_WRITE(pair, pairs->pair + idx, MochaRPCKeyValuePair *);
   }
 
   return pairs;
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsCreate(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsCreate(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize)
 {
-  size_t totalSize = OFFSET_OF(MocaRPCKeyValuePairs, extra) + (size * sizeof(MocaRPCKeyValuePair *));
+  size_t totalSize = OFFSET_OF(MochaRPCKeyValuePairs, extra) + (size * sizeof(MochaRPCKeyValuePair *));
 
   for (int32_t idx = 0; idx < size; ++idx) {
-    totalSize += MOCA_RPC_KEY_VALUE_PAIR_SIZE(keysSize[idx], valuesSize[idx]);
+    totalSize += MOCHA_RPC_KEY_VALUE_PAIR_SIZE(keysSize[idx], valuesSize[idx]);
   }
 
-  return convert(size, keys, keysSize, values, valuesSize, static_cast<MocaRPCKeyValuePairs *>(malloc(totalSize)));
+  return convert(size, keys, keysSize, values, valuesSize, static_cast<MochaRPCKeyValuePairs *>(malloc(totalSize)));
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsCreate2(int32_t size, const char **keys, const char **values)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsCreate2(int32_t size, const char **keys, const char **values)
 {
   int32_t buffer[64];
   int32_t *keysSize;
@@ -485,36 +485,36 @@ MocaRPCKeyValuePairsCreate2(int32_t size, const char **keys, const char **values
     keysSize = static_cast<int32_t *>(malloc(sizeof(int32_t) * size * 2));
   }
   valuesSize = keysSize + size;
-  size_t totalSize = OFFSET_OF(MocaRPCKeyValuePairs, extra) + (size * sizeof(MocaRPCKeyValuePair *));
+  size_t totalSize = OFFSET_OF(MochaRPCKeyValuePairs, extra) + (size * sizeof(MochaRPCKeyValuePair *));
 
   for (int32_t idx = 0; idx < size; ++idx) {
     int32_t keySize = static_cast<int32_t>(strlen(keys[idx]));
     keysSize[idx] = keySize;
     int32_t valueSize = static_cast<int32_t>(strlen(values[idx]));
     valuesSize[idx] = valueSize;
-    totalSize += MOCA_RPC_KEY_VALUE_PAIR_SIZE(keySize, valueSize);
+    totalSize += MOCHA_RPC_KEY_VALUE_PAIR_SIZE(keySize, valueSize);
   }
 
-  return convert(size, keys, keysSize, values, valuesSize, static_cast<MocaRPCKeyValuePairs *>(malloc(totalSize)));
+  return convert(size, keys, keysSize, values, valuesSize, static_cast<MochaRPCKeyValuePairs *>(malloc(totalSize)));
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsWrapToInternal(int32_t size, MocaRPCKeyValuePairsWrapToInternalSink sink, void *sinkUserData, MocaRPCKeyValuePairs *to)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsWrapToInternal(int32_t size, MochaRPCKeyValuePairsWrapToInternalSink sink, void *sinkUserData, MochaRPCKeyValuePairs *to)
 {
   if (to == NULL || to->capacity < size || to->capacity - size > 32) {
-    MocaRPCKeyValuePairsDestroy(to);
-    int32_t capacity = MOCA_RPC_ALIGN(size, 8);
-    size_t headerBufferOffset = OFFSET_OF(MocaRPCKeyValuePairs, extra) + (capacity * sizeof(MocaRPCKeyValuePair *));
-    size_t stringBufferOffset = headerBufferOffset + (capacity * OFFSET_OF(MocaRPCKeyValuePair, extra));
-    size_t totalSize = stringBufferOffset + (capacity * 2 * sizeof(MocaRPCString));
+    MochaRPCKeyValuePairsDestroy(to);
+    int32_t capacity = MOCHA_RPC_ALIGN(size, 8);
+    size_t headerBufferOffset = OFFSET_OF(MochaRPCKeyValuePairs, extra) + (capacity * sizeof(MochaRPCKeyValuePair *));
+    size_t stringBufferOffset = headerBufferOffset + (capacity * OFFSET_OF(MochaRPCKeyValuePair, extra));
+    size_t totalSize = stringBufferOffset + (capacity * 2 * sizeof(MochaRPCString));
 
-    MocaRPCKeyValuePairs *pairs = static_cast<MocaRPCKeyValuePairs *>(malloc(totalSize));
-    pairs->pair = unsafeGet<MocaRPCKeyValuePair*>(pairs->extra, 0);
+    MochaRPCKeyValuePairs *pairs = static_cast<MochaRPCKeyValuePairs *>(malloc(totalSize));
+    pairs->pair = unsafeGet<MochaRPCKeyValuePair*>(pairs->extra, 0);
     pairs->capacity = capacity;
-    MocaRPCString *string = unsafeGet<MocaRPCString>(pairs, stringBufferOffset);
+    MochaRPCString *string = unsafeGet<MochaRPCString>(pairs, stringBufferOffset);
 
     for (int32_t idx = 0; idx < capacity; ++idx) {
-      MocaRPCKeyValuePair *pair = unsafeGet<MocaRPCKeyValuePair>(pairs, headerBufferOffset + (idx * OFFSET_OF(MocaRPCKeyValuePair, extra)));
+      MochaRPCKeyValuePair *pair = unsafeGet<MochaRPCKeyValuePair>(pairs, headerBufferOffset + (idx * OFFSET_OF(MochaRPCKeyValuePair, extra)));
       pairs->pair[idx] = pair;
       pair->key = string++;
       pair->value = string++;
@@ -522,7 +522,7 @@ MocaRPCKeyValuePairsWrapToInternal(int32_t size, MocaRPCKeyValuePairsWrapToInter
     to = pairs;
   }
 
-  MocaRPCKeyValuePair **headers = to->pair;
+  MochaRPCKeyValuePair **headers = to->pair;
   for (int32_t idx = 0; idx < size; ++idx) {
     sink(idx, headers[idx], sinkUserData);
   }
@@ -531,59 +531,59 @@ MocaRPCKeyValuePairsWrapToInternal(int32_t size, MocaRPCKeyValuePairsWrapToInter
   return to;
 }
 
-struct MocaRPCKeyValuePairsWrapToSinkArgument {
+struct MochaRPCKeyValuePairsWrapToSinkArgument {
   const char **keys;
   const char **values;
   const int32_t *keysSize;
   const int32_t *valuesSize;
 };
 
-void MocaRPCKeyValuePairsWrapToSink(int32_t index, MocaRPCKeyValuePair *pair, void *userData)
+void MochaRPCKeyValuePairsWrapToSink(int32_t index, MochaRPCKeyValuePair *pair, void *userData)
 {
-  MocaRPCKeyValuePairsWrapToSinkArgument *argument = static_cast<MocaRPCKeyValuePairsWrapToSinkArgument *>(userData);
-  MocaRPCStringWrapTo(argument->keys[index], argument->keysSize[index], pair->key);
-  MocaRPCStringWrapTo(argument->values[index], argument->valuesSize[index], pair->value);
+  MochaRPCKeyValuePairsWrapToSinkArgument *argument = static_cast<MochaRPCKeyValuePairsWrapToSinkArgument *>(userData);
+  MochaRPCStringWrapTo(argument->keys[index], argument->keysSize[index], pair->key);
+  MochaRPCStringWrapTo(argument->values[index], argument->valuesSize[index], pair->value);
 }
 
-void MocaRPCKeyValuePairsWrapToNoSizeSink(int32_t index, MocaRPCKeyValuePair *pair, void *userData)
+void MochaRPCKeyValuePairsWrapToNoSizeSink(int32_t index, MochaRPCKeyValuePair *pair, void *userData)
 {
-  MocaRPCKeyValuePairsWrapToSinkArgument *argument = static_cast<MocaRPCKeyValuePairsWrapToSinkArgument *>(userData);
+  MochaRPCKeyValuePairsWrapToSinkArgument *argument = static_cast<MochaRPCKeyValuePairsWrapToSinkArgument *>(userData);
   const char *key = argument->keys[index];
   const char *value = argument->values[index];
-  MocaRPCStringWrapTo(key, static_cast<int32_t>(strlen(key)), pair->key);
-  MocaRPCStringWrapTo(value, static_cast<int32_t>(strlen(value)), pair->value);
+  MochaRPCStringWrapTo(key, static_cast<int32_t>(strlen(key)), pair->key);
+  MochaRPCStringWrapTo(value, static_cast<int32_t>(strlen(value)), pair->value);
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsWrapTo(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize, MocaRPCKeyValuePairs *to)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsWrapTo(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize, MochaRPCKeyValuePairs *to)
 {
-  MocaRPCKeyValuePairsWrapToSinkArgument argument = {keys, values, keysSize, valuesSize};
+  MochaRPCKeyValuePairsWrapToSinkArgument argument = {keys, values, keysSize, valuesSize};
   if (keysSize && valuesSize) {
-    return MocaRPCKeyValuePairsWrapToInternal(size, MocaRPCKeyValuePairsWrapToSink, &argument, to);
+    return MochaRPCKeyValuePairsWrapToInternal(size, MochaRPCKeyValuePairsWrapToSink, &argument, to);
   } else {
-    return MocaRPCKeyValuePairsWrapToInternal(size, MocaRPCKeyValuePairsWrapToNoSizeSink, &argument, to);
+    return MochaRPCKeyValuePairsWrapToInternal(size, MochaRPCKeyValuePairsWrapToNoSizeSink, &argument, to);
   }
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsWrapTo2(int32_t size, const char **keys, const char **values, MocaRPCKeyValuePairs *to)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsWrapTo2(int32_t size, const char **keys, const char **values, MochaRPCKeyValuePairs *to)
 {
-  return MocaRPCKeyValuePairsWrapTo(size, keys, NULL, values, NULL, to);
+  return MochaRPCKeyValuePairsWrapTo(size, keys, NULL, values, NULL, to);
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsWrap(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsWrap(int32_t size, const char **keys, const int32_t *keysSize, const char **values, const int32_t *valuesSize)
 {
-  return MocaRPCKeyValuePairsWrapTo(size, keys, keysSize, values, valuesSize, NULL);
+  return MochaRPCKeyValuePairsWrapTo(size, keys, keysSize, values, valuesSize, NULL);
 }
 
-MocaRPCKeyValuePairs *
-MocaRPCKeyValuePairsWrap2(int32_t size, const char **keys, const char **values)
+MochaRPCKeyValuePairs *
+MochaRPCKeyValuePairsWrap2(int32_t size, const char **keys, const char **values)
 {
-  return MocaRPCKeyValuePairsWrapTo(size, keys, NULL, values, NULL, NULL);
+  return MochaRPCKeyValuePairsWrapTo(size, keys, NULL, values, NULL, NULL);
 }
 
-void MocaRPCKeyValuePairsDestroy(MocaRPCKeyValuePairs *pairs)
+void MochaRPCKeyValuePairsDestroy(MochaRPCKeyValuePairs *pairs)
 {
   free(pairs);
 }

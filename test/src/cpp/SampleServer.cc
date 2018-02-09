@@ -1,10 +1,10 @@
-#include <moca/rpc/RPCChannel.h>
-#include <moca/rpc/RPCDispatcher.h>
+#include <mocha/rpc/RPCChannel.h>
+#include <mocha/rpc/RPCDispatcher.h>
 #include <thread>
 #include <unistd.h>
 #include <signal.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 using namespace std;
 
 #ifdef __DARWIN__

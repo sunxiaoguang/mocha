@@ -3,13 +3,13 @@ BUILD_DIR ?= $(PROJECT_HOME)/build/make
 
 include $(BUILD_DIR)/make.defs
 
-CPPFLAGS += -DMOCA_RPC_NANO
+CPPFLAGS += -DMOCHA_RPC_NANO
 
 CPPSRCS += JniChannel.cc RPCChannelNano.cc RPCNano.cc RPCChannelEasy.cc RPCProtocol.cc RPCLogging.cc
 
 INCLUDE_DIRS += ../../include ../../rpc
 
-SOTARGET = mocarpc_nano_jni
+SOTARGET = mocharpc_nano_jni
 
 ifeq ($(THE_OS), linux)
 DEPLIBS += uuid

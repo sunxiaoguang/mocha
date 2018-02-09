@@ -8,7 +8,7 @@
     <pathelement location="${classes.dir}/"/>
     <fileset refid="netty-all-latest.jar"/>
     <fileset refid="slf4j-api-latest.jar"/>
-    <pathelement location="core/output/lib/moca-core-current.jar"/>
+    <pathelement location="core/output/lib/mocha-core-current.jar"/>
   </path>
 
   <path id="runtime.classpath">
@@ -22,33 +22,33 @@
       debug="${javac.debug}" source="1.5" target="1.5" 
       fork="${javac.fork}" includeAntRuntime="${javac.includeAntRuntime}">
       <src path="${java.src.dir}"/>
-      <include name="com/moca/rpc/protocol/*.java"/>
-      <include name="com/moca/rpc/protocol/impl/Jni*.java"/>
-      <include name="com/moca/rpc/protocol/impl/ChannelImpl.java"/>
-      <include name="com/moca/rpc/protocol/impl/CompletedFuture.java"/>
+      <include name="com/mocha/rpc/protocol/*.java"/>
+      <include name="com/mocha/rpc/protocol/impl/Jni*.java"/>
+      <include name="com/mocha/rpc/protocol/impl/ChannelImpl.java"/>
+      <include name="com/mocha/rpc/protocol/impl/CompletedFuture.java"/>
     </javac>
   </target>
   <target name="compile" depends="compile-nano, common-compile-test" />
 
   <target name="package-nano" depends="compile-nano">
-    <jar destfile="${lib.dir}/moca-rpcnano-current.jar">
+    <jar destfile="${lib.dir}/mocha-rpcnano-current.jar">
       <fileset dir="${classes.dir}">
-        <include name="com/moca/rpc/protocol/*.class"/>
-        <include name="com/moca/rpc/protocol/impl/Jni*.class"/>
-        <include name="com/moca/rpc/protocol/impl/ChannelImpl.class"/>
-        <include name="com/moca/rpc/protocol/impl/CompletedFuture.class"/>
+        <include name="com/mocha/rpc/protocol/*.class"/>
+        <include name="com/mocha/rpc/protocol/impl/Jni*.class"/>
+        <include name="com/mocha/rpc/protocol/impl/ChannelImpl.class"/>
+        <include name="com/mocha/rpc/protocol/impl/CompletedFuture.class"/>
       </fileset>
     </jar>
   </target>
   <target name="package" depends="package-nano, common-package"/>
   <target name="fat-jar" depends="compile">
-    <jar destfile="${build.lib.dir}/moca-rpc-test.jar">
+    <jar destfile="${build.lib.dir}/mocha-rpc-test.jar">
       <fileset dir="${classes.dir}"/>
       <fileset dir="${test.classes.dir}"/>
       <zipfileset src="${slf4j-1.7.10.home}/slf4j-api-1.7.10.jar"/>
       <zipfileset src="${slf4j-1.7.10.home}/slf4j-simple-1.7.10.jar"/>
       <zipfileset src="${netty-4.0.26.home}/jar/all-in-one/netty-all-4.0.26.Final.jar"/>
-      <zipfileset src="core/output/lib/moca-core-current.jar"/>
+      <zipfileset src="core/output/lib/mocha-core-current.jar"/>
     </jar>
   </target>
 

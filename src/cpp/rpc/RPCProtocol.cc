@@ -4,7 +4,7 @@
 /* TODO make this configurable */
 #define COMPRESS_SIZE_THRESHOLD (256)
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 int32_t
 RPCProtocol::serialize(const StringLite &data, ChainedBuffer **head, ChainedBuffer **current, ChainedBuffer ***nextBuffer, int32_t *totalSize, int32_t *numBuffers) const
@@ -36,11 +36,11 @@ RPCProtocol::serialize(const KeyValuePairs<StringLite, StringLite> &pairs, Chain
   int32_t code;
   for (size_t idx = 0, size = pairs.size(); idx < size; ++idx) {
     const KeyValuePair<StringLite, StringLite> *pair = pairs.get(idx);
-    if (MOCA_RPC_FAILED(code = serialize(pair->key, head, current, nextBuffer, totalSize, numBuffers))) {
+    if (MOCHA_RPC_FAILED(code = serialize(pair->key, head, current, nextBuffer, totalSize, numBuffers))) {
       RPC_LOG_ERROR("Could not serialize key. %d", code);
       return code;
     }
-    if (MOCA_RPC_FAILED(code = serialize(pair->value, head, current, nextBuffer, totalSize, numBuffers))) {
+    if (MOCHA_RPC_FAILED(code = serialize(pair->value, head, current, nextBuffer, totalSize, numBuffers))) {
       RPC_LOG_ERROR("Could not serialize value. %d", code);
       return code;
     }
@@ -59,7 +59,7 @@ RPCProtocol::doSendPacketUnsafe(int64_t id, int32_t code, int32_t type,
 
   int32_t numBuffers = 0;
   int32_t st = RPC_OK;
-  ChainedBuffer::checkBuffer(&head, &buffer, &nextBuffer, &numBuffers, MOCA_RPC_ALIGN(sizeof(PacketHeader) + writeOpaqueDataSize_, writeBufferAlignment_));
+  ChainedBuffer::checkBuffer(&head, &buffer, &nextBuffer, &numBuffers, MOCHA_RPC_ALIGN(sizeof(PacketHeader) + writeOpaqueDataSize_, writeBufferAlignment_));
   buffer->allocate<void>(writeOpaqueDataSize_);
   PacketHeader *hdr = buffer->allocate<PacketHeader>();
   hdr->id = id;
@@ -82,8 +82,8 @@ RPCProtocol::doSendPacketUnsafe(int64_t id, int32_t code, int32_t type,
       headersBuffer = NULL;
       headersNextBuffer = &headersHead;
       headersNumBuffers = 0;
-      ChainedBuffer::checkBuffer(&headersHead, &headersBuffer, &headersNextBuffer, &headersNumBuffers, MOCA_RPC_ALIGN(1, writeBufferAlignment_));
-      MOCA_RPC_DO_GOTO(st, serialize(*headers, &headersHead, &headersBuffer, &headersNextBuffer, &headersSize, &headersNumBuffers), cleanupExit)
+      ChainedBuffer::checkBuffer(&headersHead, &headersBuffer, &headersNextBuffer, &headersNumBuffers, MOCHA_RPC_ALIGN(1, writeBufferAlignment_));
+      MOCHA_RPC_DO_GOTO(st, serialize(*headers, &headersHead, &headersBuffer, &headersNextBuffer, &headersSize, &headersNumBuffers), cleanupExit)
       if (headersSize < COMPRESS_SIZE_THRESHOLD) {
         RPC_LOG_DEBUG("Serialized headers size %d is not greater than compression threshold %d, use plain headers", headersSize, COMPRESS_SIZE_THRESHOLD);
         goto fallback;
@@ -122,7 +122,7 @@ fallback:
       headersHead = NULL;
       hdr->headerSize = headersSize;
     } else {
-      MOCA_RPC_DO_GOTO(st, serialize(*headers, &head, &buffer, &nextBuffer, &hdr->headerSize, &numBuffers), cleanupExit)
+      MOCHA_RPC_DO_GOTO(st, serialize(*headers, &head, &buffer, &nextBuffer, &hdr->headerSize, &numBuffers), cleanupExit)
     }
   }
 
@@ -154,7 +154,7 @@ RPCProtocol::sendNegotiation()
   int32_t numBuffers = 0;
   int32_t st = RPC_OK;
   ChainedBuffer::checkBuffer(&head, &buffer, &nextBuffer, &numBuffers,
-      MOCA_RPC_ALIGN((sizeof(int32_t) * 3) + localId_.size() + 1 + writeOpaqueDataSize_, writeBufferAlignment_));
+      MOCHA_RPC_ALIGN((sizeof(int32_t) * 3) + localId_.size() + 1 + writeOpaqueDataSize_, writeBufferAlignment_));
 
   buffer->allocate<void>(writeOpaqueDataSize_);
   NegotiationHeader *header = buffer->allocate<NegotiationHeader>(OFFSET_OF(NegotiationHeader, id) + localId_.size() + 1);
@@ -232,7 +232,7 @@ RPCProtocol::onRead(size_t size)
   if (st == RPC_WOULDBLOCK) {
     st = RPC_OK;
   }
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     RPC_LOG_ERROR("Failed to read data. %d:%s", st, errorString(st));
   }
 }
@@ -308,7 +308,7 @@ RPCProtocol::doReadNegotiationMagic()
 {
   int32_t magic;
   int32_t st;
-  if (MOCA_RPC_FAILED(st = doRead(&magic, STATE_NEGOTIATION_FLAGS))) {
+  if (MOCHA_RPC_FAILED(st = doRead(&magic, STATE_NEGOTIATION_FLAGS))) {
     return st;
   }
   switch (static_cast<uint32_t>(magic)) {
@@ -326,7 +326,7 @@ int32_t
 RPCProtocol::doReadNegotiationFlags()
 {
   int32_t st;
-  if (MOCA_RPC_FAILED(st = doRead(&remoteFlags_, STATE_NEGOTIATION_PEER_ID_SIZE))) {
+  if (MOCHA_RPC_FAILED(st = doRead(&remoteFlags_, STATE_NEGOTIATION_PEER_ID_SIZE))) {
     return st;
   }
   remoteVersion_ = remoteFlags_ & 0xFF;
@@ -378,7 +378,7 @@ RPCProtocol::doReadCompressedPacketHeader()
   uLongf tmp;
   StringLite key;
   StringLite value;
-  MOCA_RPC_DO_GOTO(st, doRead(packetHeaderSize_, readBuffer, state), cleanupExit);
+  MOCHA_RPC_DO_GOTO(st, doRead(packetHeaderSize_, readBuffer, state), cleanupExit);
 
   if (packetPayloadSize_ == 0) {
     setState(STATE_START_OVER);
@@ -444,16 +444,16 @@ RPCProtocol::doReadPlainPacketHeader()
   StringLite value;
   int32_t state = state_;
   while (readAvailable_ > endReadAvailable) {
-    if (MOCA_RPC_FAILED(st = doRead(&size, state))) {
+    if (MOCHA_RPC_FAILED(st = doRead(&size, state))) {
       return st;
     }
-    if (MOCA_RPC_FAILED(st = doRead(size, &key, state))) {
+    if (MOCHA_RPC_FAILED(st = doRead(size, &key, state))) {
       return st;
     }
-    if (MOCA_RPC_FAILED(st = doRead(&size, state))) {
+    if (MOCHA_RPC_FAILED(st = doRead(&size, state))) {
       return st;
     }
-    if (MOCA_RPC_FAILED(st = doRead(size, &value, state))) {
+    if (MOCHA_RPC_FAILED(st = doRead(size, &value, state))) {
       return st;
     }
     packetHeaders_.transfer(key, value);
@@ -641,7 +641,7 @@ RPCProtocol::checkAndGetBuffer(size_t *size)
   size_t suggested = *size;
   bool notEnough = static_cast<size_t>(bufferAvailable) < suggested;
   if (bufferAvailable == 0 || (notEnough && bufferAvailable < 16)) {
-    writeBuffer_ = ChainedBuffer::create(MOCA_RPC_ALIGN(suggested, 4096), &nextBuffer_);
+    writeBuffer_ = ChainedBuffer::create(MOCHA_RPC_ALIGN(suggested, 4096), &nextBuffer_);
   } else {
     if (notEnough) {
       *size = bufferAvailable;
@@ -661,11 +661,11 @@ RPCProtocol::init(const StringLite &id, RPCLogger logger, RPCLogLevel level, RPC
   channelFlags_ = channelFlags;
   int32_t rc;
   localId_ = id;
-  if (MOCA_RPC_FAILED(rc = initBuffer())) {
+  if (MOCHA_RPC_FAILED(rc = initBuffer())) {
     RPC_LOG_ERROR("Could not initialize buffer. %d", rc);
     return rc;
   }
   return rc;
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

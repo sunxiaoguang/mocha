@@ -1,7 +1,7 @@
 #define __STDC_FORMAT_MACROS
-#include <moca/rpc-c/RPCServer.h>
-#include <moca/rpc-c/RPCChannel.h>
-#include <moca/rpc-c/RPCDispatcher.h>
+#include <mocha/rpc-c/RPCServer.h>
+#include <mocha/rpc-c/RPCChannel.h>
+#include <mocha/rpc-c/RPCDispatcher.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
@@ -10,20 +10,20 @@
 
 int32_t established = 0;
 
-void eventListener(MocaRPCServer *server, MocaRPCChannel *channel, int32_t eventType, MocaRPCOpaqueData eventData, MocaRPCOpaqueData userData);
+void eventListener(MochaRPCServer *server, MochaRPCChannel *channel, int32_t eventType, MochaRPCOpaqueData eventData, MochaRPCOpaqueData userData);
 
-void eventListener(MocaRPCServer *server, MocaRPCChannel *channel, int32_t eventType, MocaRPCOpaqueData eventData, MocaRPCOpaqueData userData)
+void eventListener(MochaRPCServer *server, MochaRPCChannel *channel, int32_t eventType, MochaRPCOpaqueData eventData, MochaRPCOpaqueData userData)
 {
   char *remoteAddress = NULL, *localAddress = NULL, *remoteId = NULL, *localId = NULL;
   uint16_t remotePort, localPort;
-  if (eventType != MOCA_RPC_EVENT_TYPE_CHANNEL_DISCONNECTED && eventType != MOCA_RPC_EVENT_TYPE_CHANNEL_DESTROYED && eventType != 1 << 29 && eventType != 1 << 30) {
-    if (MocaRPCChannelRemoteAddress(channel, &remoteAddress, &remotePort) ||
-        MocaRPCChannelLocalAddress(channel, &localAddress, &localPort)) {
+  if (eventType != MOCHA_RPC_EVENT_TYPE_CHANNEL_DISCONNECTED && eventType != MOCHA_RPC_EVENT_TYPE_CHANNEL_DESTROYED && eventType != 1 << 29 && eventType != 1 << 30) {
+    if (MochaRPCChannelRemoteAddress(channel, &remoteAddress, &remotePort) ||
+        MochaRPCChannelLocalAddress(channel, &localAddress, &localPort)) {
       printf("Could not get address\n");
       goto cleanupExit;
     }
-    if (MocaRPCChannelRemoteId(channel, &remoteId) ||
-        MocaRPCChannelLocalId(channel, &localId)) {
+    if (MochaRPCChannelRemoteId(channel, &remoteId) ||
+        MochaRPCChannelLocalId(channel, &localId)) {
       printf("Could not get id\n");
       goto cleanupExit;
     }
@@ -35,58 +35,58 @@ void eventListener(MocaRPCServer *server, MocaRPCChannel *channel, int32_t event
     case 1 << 30:
       printf("Server destroyed\n");
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_LISTENING:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_LISTENING:
       printf("server is listening on %s@%s:%u\n", localId, localAddress, localPort);
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_CONNECTED:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_CONNECTED:
       printf("Connected to server %s@%s:%u from %s@%s:%u\n", remoteId, remoteAddress, remotePort, localId, localAddress, localPort);
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_ESTABLISHED:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_ESTABLISHED:
       printf("Session to server %s@%s:%u from %s@%s:%u is established\n", remoteId, remoteAddress, remotePort, localId, localAddress, localPort);
       established = 1;
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_DISCONNECTED:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_DISCONNECTED:
       printf("Disconnected from server\n");
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_REQUEST:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_REQUEST:
       {
-        MocaRPCRequestEventData *data = (MocaRPCRequestEventData *) eventData;
+        MochaRPCRequestEventData *data = (MochaRPCRequestEventData *) eventData;
         printf("Request %" PRId64 " from server %s@%s:%u\n", data->id, remoteId, remoteAddress, remotePort);
         printf("Code: %d\n", data->code);
         int32_t idx;
         for (idx= 0; idx < data->headers->size; ++idx) {
-          MocaRPCKeyValuePair *pair = data->headers->pair[idx];
+          MochaRPCKeyValuePair *pair = data->headers->pair[idx];
           printf("Header %s => %s\n", pair->key->content.ptr, pair->value->content.ptr);
         }
         printf("%d bytes payload\n", data->payloadSize);
-        MocaRPCChannelResponse(channel, data->id, data->code - 100, data->headers, NULL, 0);
+        MochaRPCChannelResponse(channel, data->id, data->code - 100, data->headers, NULL, 0);
       }
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_RESPONSE:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_RESPONSE:
       {
-        MocaRPCResponseEventData *data = (MocaRPCResponseEventData *) eventData;
+        MochaRPCResponseEventData *data = (MochaRPCResponseEventData *) eventData;
         printf("Response %" PRId64 " from server %s@%s:%u\n", data->id, remoteId, remoteAddress, remotePort);
         printf("Code: %d\n", data->code);
         int32_t idx;
         for (idx= 0; idx < data->headers->size; ++idx) {
-          MocaRPCKeyValuePair *pair = data->headers->pair[idx];
+          MochaRPCKeyValuePair *pair = data->headers->pair[idx];
           printf("Header %s => %s\n", pair->key->content.ptr, pair->value->content.ptr);
         }
         printf("%d bytes payload\n", data->payloadSize);
       }
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_PAYLOAD:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_PAYLOAD:
       {
-        MocaRPCPayloadEventData *data = (MocaRPCPayloadEventData *) eventData;
+        MochaRPCPayloadEventData *data = (MochaRPCPayloadEventData *) eventData;
         printf("Payload of request %" PRId64 " from server %s@%s:%u\n", data->id, remoteId, remoteAddress, remotePort);
         printf("Size : %d\n", data->size);
         printf("Payload : %c\n", (*(char *) data->payload));
         printf("Commit : %s\n", data->commit ? "true" : "false");
       }
       break;
-    case MOCA_RPC_EVENT_TYPE_CHANNEL_ERROR:
+    case MOCHA_RPC_EVENT_TYPE_CHANNEL_ERROR:
       {
-        MocaRPCErrorEventData *data = (MocaRPCErrorEventData *) eventData;
+        MochaRPCErrorEventData *data = (MochaRPCErrorEventData *) eventData;
         printf("Error %d:%s\n", data->code, data->message);
       }
       break;
@@ -102,31 +102,31 @@ cleanupExit:
 int main(int argc, char **argv)
 {
   signal(SIGPIPE, SIG_IGN);
-  MocaRPCDispatcherBuilder *dispatcherBuilder = MocaRPCDispatcherBuilderCreate();
-  MocaRPCDispatcher *dispatcher;
-  if (MocaRPCDispatcherBuilderBuild(dispatcherBuilder, &dispatcher)) {
+  MochaRPCDispatcherBuilder *dispatcherBuilder = MochaRPCDispatcherBuilderCreate();
+  MochaRPCDispatcher *dispatcher;
+  if (MochaRPCDispatcherBuilderBuild(dispatcherBuilder, &dispatcher)) {
     printf("Could not build dispatcher");
     return 1;
   }
-  MocaRPCDispatcherBuilderDestroy(dispatcherBuilder);
-  MocaRPCDispatcherThread *dispatcherThread = MocaRPCDispatcherThreadCreate(dispatcher);
-  MocaRPCServerBuilder *builder = MocaRPCServerBuilderCreate();
-  MocaRPCServer *server = NULL;
+  MochaRPCDispatcherBuilderDestroy(dispatcherBuilder);
+  MochaRPCDispatcherThread *dispatcherThread = MochaRPCDispatcherThreadCreate(dispatcher);
+  MochaRPCServerBuilder *builder = MochaRPCServerBuilderCreate();
+  MochaRPCServer *server = NULL;
   
-  if (MocaRPCServerBuilderBuild(MocaRPCServerBuilderDispatcher(MocaRPCServerBuilderListener(
-        MocaRPCServerBuilderBind(builder, argv[1]), eventListener, NULL, 0xFFFFFFFF), dispatcher), &server)) {
+  if (MochaRPCServerBuilderBuild(MochaRPCServerBuilderDispatcher(MochaRPCServerBuilderListener(
+        MochaRPCServerBuilderBind(builder, argv[1]), eventListener, NULL, 0xFFFFFFFF), dispatcher), &server)) {
     printf("Could not build server");
     return 1;
   }
-  MocaRPCServerBuilderDestroy(builder);
+  MochaRPCServerBuilderDestroy(builder);
 
   sleep(10);
-  MocaRPCServerShutdown(server);
-  MocaRPCServerRelease(server);
-  MocaRPCDispatcherStop(dispatcher);
-  MocaRPCDispatcherRelease(dispatcher);
-  MocaRPCDispatcherThreadShutdown(dispatcherThread);
-  MocaRPCDispatcherThreadJoin(dispatcherThread);
-  MocaRPCDispatcherThreadRelease(dispatcherThread);
+  MochaRPCServerShutdown(server);
+  MochaRPCServerRelease(server);
+  MochaRPCDispatcherStop(dispatcher);
+  MochaRPCDispatcherRelease(dispatcher);
+  MochaRPCDispatcherThreadShutdown(dispatcherThread);
+  MochaRPCDispatcherThreadJoin(dispatcherThread);
+  MochaRPCDispatcherThreadRelease(dispatcherThread);
   return 0;
 }

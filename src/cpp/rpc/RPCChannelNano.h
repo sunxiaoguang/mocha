@@ -1,7 +1,7 @@
-#ifndef __MOCA_RPC_NANO_CHANNEL_INTERNAL_H__
-#define __MOCA_RPC_NANO_CHANNEL_INTERNAL_H__
+#ifndef __MOCHA_RPC_NANO_CHANNEL_INTERNAL_H__
+#define __MOCHA_RPC_NANO_CHANNEL_INTERNAL_H__
 
-#include "moca/rpc/RPCChannelNano.h"
+#include "mocha/rpc/RPCChannelNano.h"
 #include "RPCProtocol.h"
 #include <poll.h>
 #include <pthread.h>
@@ -9,7 +9,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCChannelNanoImpl : public RPCObject, private RPCNonCopyable
 {
@@ -210,5 +210,5 @@ public:
   RPCChannelNano *build();
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 #endif

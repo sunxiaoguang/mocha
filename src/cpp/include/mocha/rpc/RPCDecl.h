@@ -1,0 +1,70 @@
+#ifndef __MOCHA_RPC_DECLARATION_H__
+#define __MOCHA_RPC_DECLARATION_H__ 1
+
+#include <new>
+#include <mocha/rpc-c/RPCDecl.h>
+
+#define MOCHA_RPC_NAMESPACE ::mocha::rpc
+
+#define BEGIN_MOCHA_RPC_NAMESPACE namespace mocha { namespace rpc {
+#define END_MOCHA_RPC_NAMESPACE }}
+
+BEGIN_MOCHA_RPC_NAMESPACE
+using namespace std;
+
+typedef enum MochaRPCStatus RPCStatus;
+
+enum {
+  RPC_OK = MOCHA_RPC_OK,
+  RPC_INVALID_ARGUMENT = MOCHA_RPC_INVALID_ARGUMENT,
+  RPC_CORRUPTED_DATA = MOCHA_RPC_CORRUPTED_DATA,
+  RPC_OUT_OF_MEMORY = MOCHA_RPC_OUT_OF_MEMORY,
+  RPC_CAN_NOT_CONNECT = MOCHA_RPC_CAN_NOT_CONNECT,
+  RPC_NO_ACCESS = MOCHA_RPC_NO_ACCESS,
+  RPC_NOT_SUPPORTED = MOCHA_RPC_NOT_SUPPORTED,
+  RPC_TOO_MANY_OPEN_FILE = MOCHA_RPC_TOO_MANY_OPEN_FILE,
+  RPC_INSUFFICIENT_RESOURCE = MOCHA_RPC_INSUFFICIENT_RESOURCE,
+  RPC_INTERNAL_ERROR = MOCHA_RPC_INTERNAL_ERROR,
+  RPC_ILLEGAL_STATE = MOCHA_RPC_ILLEGAL_STATE,
+  RPC_TIMEOUT = MOCHA_RPC_TIMEOUT,
+  RPC_DISCONNECTED = MOCHA_RPC_DISCONNECTED,
+  RPC_WOULDBLOCK = MOCHA_RPC_WOULDBLOCK,
+  RPC_INCOMPATIBLE_PROTOCOL = MOCHA_RPC_INCOMPATIBLE_PROTOCOL,
+  RPC_CAN_NOT_BIND = MOCHA_RPC_CAN_NOT_BIND,
+  RPC_BUFFER_OVERFLOW = MOCHA_RPC_BUFFER_OVERFLOW,
+  RPC_CANCELED = MOCHA_RPC_CANCELED,
+};
+
+template<typename T>
+T safeRead(const T &input)
+{
+  T result;
+  MOCHA_SAFE_POINTER_READ(result, &input, T)
+  return result;
+}
+
+template<typename T>
+T safeRead(const T *addr)
+{
+  T result;
+  MOCHA_SAFE_POINTER_READ(result, addr, T)
+  return result;
+}
+
+template<typename T>
+T safeRead(const void *addr)
+{
+  T result;
+  MOCHA_SAFE_POINTER_READ(result, addr, T)
+  return result;
+}
+
+template<typename T>
+void safeWrite(const T& data, T *addr)
+{
+  MOCHA_SAFE_POINTER_WRITE(data, addr, T)
+}
+
+END_MOCHA_RPC_NAMESPACE
+
+#endif /* __MOCHA_RPC_DECLARATION_H__ */

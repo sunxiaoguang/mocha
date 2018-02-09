@@ -1,10 +1,10 @@
-#include <moca/rpc/RPCChannelEasy.h>
+#include <mocha/rpc/RPCChannelEasy.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <pthread.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 int main(int argc, char **argv)
 {

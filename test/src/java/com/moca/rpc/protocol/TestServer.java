@@ -1,4 +1,4 @@
-package com.moca.rpc.protocol;
+package com.mocha.rpc.protocol;
 
 import java.util.concurrent.atomic.*;
 import java.util.*;
@@ -6,7 +6,7 @@ import java.io.*;
 
 import org.slf4j.*;
 
-import com.moca.rpc.protocol.impl.*;
+import com.mocha.rpc.protocol.impl.*;
 
 public class TestServer implements ChannelListener
 {

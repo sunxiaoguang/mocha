@@ -1,8 +1,8 @@
-package com.moca.rpc;
+package com.mocha.rpc;
 
 import java.io.*;
 import java.util.*;
-import com.moca.rpc.protocol.*;
+import com.mocha.rpc.protocol.*;
 
 public class TestChannelNano
 {

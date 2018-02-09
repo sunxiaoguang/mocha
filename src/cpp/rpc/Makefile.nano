@@ -4,12 +4,12 @@ BUILD_DIR ?= $(PROJECT_HOME)/build/make
 OUTDIR_SUFFIX = .nano
 include $(BUILD_DIR)/make.defs
 
-CPPFLAGS += -DMOCA_RPC_NANO
+CPPFLAGS += -DMOCHA_RPC_NANO
 CPPSRCS += RPCProtocol.cc RPCChannelNano.cc RPCChannelEasy.cc RPCLogging.cc RPCNano.cc
 INCLUDE_DIRS += ../include
 
-SOTARGET = MocaRPCNano
-LIB_NAME = MocaRPCNano
+SOTARGET = MochaRPCNano
+LIB_NAME = MochaRPCNano
 
 DEPLIBS += z
 

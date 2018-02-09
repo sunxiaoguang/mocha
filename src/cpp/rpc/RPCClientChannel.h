@@ -1,10 +1,10 @@
-#ifndef __MOCA_RPC_CLIENT_CHANNEL_INTERNAL_H__
-#define __MOCA_RPC_CLIENT_CHANNEL_INTERNAL_H__
+#ifndef __MOCHA_RPC_CLIENT_CHANNEL_INTERNAL_H__
+#define __MOCHA_RPC_CLIENT_CHANNEL_INTERNAL_H__
 
 #include "RPCChannel.h"
 #include "RPCProtocol.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 struct WriteRequest;
 
@@ -111,6 +111,6 @@ public:
   RPCClientChannel *writeNext;
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
 #endif

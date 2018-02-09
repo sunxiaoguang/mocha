@@ -4,7 +4,7 @@
 #include <zlib.h>
 #include <assert.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 struct WriteRequest
 {
@@ -168,7 +168,7 @@ RPCClientChannel::doWrite(ChainedBuffer **buffer)
     st = doWriteAsync(packetRequest);
   }
 
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     RPC_LOG_ERROR("Caught error when writing data. %d", st);
   }
 }
@@ -256,7 +256,7 @@ RPCClientChannel::onConnect()
       remoteAddress_.str(), static_cast<uint32_t>(remotePort_));
   fireConnectedEvent();
   if (isBlocking()) {
-    finishAsync(MOCA_RPC_OK);
+    finishAsync(MOCHA_RPC_OK);
   }
   uv_read_start(reinterpret_cast<uv_stream_t *>(&handle_), onAllocate, onRead);
   protocol_.sendNegotiation();
@@ -294,7 +294,7 @@ RPCClientChannel::onResolved(struct addrinfo *result)
     break;
   }
 
-  if (MOCA_RPC_FAILED(st) || MOCA_RPC_FAILED(st = protocol_.init(localId_, logger_, level_, loggerUserData_, 0, limit_, channelFlags_))) {
+  if (MOCHA_RPC_FAILED(st) || MOCHA_RPC_FAILED(st = protocol_.init(localId_, logger_, level_, loggerUserData_, 0, limit_, channelFlags_))) {
     if (isBlocking()) {
       finishAsync(st);
     }
@@ -341,4 +341,4 @@ RPCClientChannel::onTimer(uint64_t now)
   }
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

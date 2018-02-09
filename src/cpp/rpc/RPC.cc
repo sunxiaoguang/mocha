@@ -1,7 +1,7 @@
 #include "RPC.h"
 #include <stdarg.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 void convert(const KeyValueMap *input, KeyValuePairs<StringLite, StringLite> *output)
 {
   StringLite realKey, realValue;
@@ -168,4 +168,4 @@ exit:
 }
 
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

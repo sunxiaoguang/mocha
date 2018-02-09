@@ -1,8 +1,8 @@
-#include "com_moca_rpc_protocol_impl_JniChannel.h"
-#include "com_moca_rpc_protocol_impl_JniChannelNano.h"
-#include "com_moca_rpc_protocol_impl_JniChannelEasy.h"
-#include <moca/rpc/RPCChannelNano.h>
-#include <moca/rpc/RPCChannelEasy.h>
+#include "com_mocha_rpc_protocol_impl_JniChannel.h"
+#include "com_mocha_rpc_protocol_impl_JniChannelNano.h"
+#include "com_mocha_rpc_protocol_impl_JniChannelEasy.h"
+#include <mocha/rpc/RPCChannelNano.h>
+#include <mocha/rpc/RPCChannelEasy.h>
 #include <pthread.h>
 #ifdef ANDROID
 #include <android/log.h>
@@ -13,12 +13,12 @@
 
 #define RPC_JAVA_EXCEPTION (-1024)
 #define MAX_LOG_LINE_SIZE (4096)
-namespace moca { namespace rpc {
+namespace mocha { namespace rpc {
 JNIEnv *jniEnv;
 }}
 
 using namespace std;
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 struct TLSContext
 {
@@ -214,7 +214,7 @@ static int32_t convert(JNIEnv *env, const char *src, jstring *str)
   }
   jbyteArray bytes = NULL;
   int32_t code = convert(env, src, strlen(src), &bytes);
-  if (MOCA_RPC_FAILED(code)){
+  if (MOCHA_RPC_FAILED(code)){
     LOG_ERROR("Can not convert '%s' to Java string", str);
     return code;
   }
@@ -238,10 +238,10 @@ static int32_t convert(JNIEnv *env, const KeyValuePairs<StringLite, StringLite> 
   jobject jpair = NULL;
   for (size_t idx = 0, size = pairs->size(); idx < size; ++idx) {
     const KeyValuePair<StringLite, StringLite> *pair = pairs->get(idx);
-    MOCA_RPC_DO_GOTO(code, convert(env, pair->key, &key), error)
-    MOCA_RPC_DO_GOTO(code, convert(env, pair->value, &value), error)
+    MOCHA_RPC_DO_GOTO(code, convert(env, pair->key, &key), error)
+    MOCHA_RPC_DO_GOTO(code, convert(env, pair->value, &value), error)
     jobject jpair = env->NewObject(keyValuePairClass, keyValuePairConstructorMethod, key, value);
-    MOCA_RPC_DO_GOTO(code, checkExceptionCode(env), error)
+    MOCHA_RPC_DO_GOTO(code, checkExceptionCode(env), error)
     env->SetObjectArrayElement(array, idx, jpair);
     env->DeleteLocalRef(jpair);
     env->DeleteLocalRef(key);
@@ -287,8 +287,8 @@ static int32_t convert(JNIEnv *env, jobjectArray headers, KeyValuePairs<StringLi
       LOG_ERROR("Could not get value out of key value pair");
       return RPC_INVALID_ARGUMENT;
     }
-    MOCA_RPC_DO(convert(env, static_cast<jstring>(key), &k));
-    MOCA_RPC_DO(convert(env, static_cast<jstring>(value), &v));
+    MOCHA_RPC_DO(convert(env, static_cast<jstring>(key), &k));
+    MOCHA_RPC_DO(convert(env, static_cast<jstring>(value), &v));
     pairs->append(k, v);
   }
 
@@ -321,12 +321,12 @@ static int32_t convert(JNIEnv *env, int64_t id, int32_t code, const KeyValuePair
     }
     env->SetByteArrayRegion(realPayload, 0, static_cast<jsize>(payloadSize), reinterpret_cast<const jbyte *>(payload));
   }
-  if (headers != NULL && MOCA_RPC_FAILED(st = convert(env, headers, &realHeaders))) {
+  if (headers != NULL && MOCHA_RPC_FAILED(st = convert(env, headers, &realHeaders))) {
     goto cleanupExit;
   }
 
   *result = env->NewObject(type, ctor, id, code, realHeaders, realPayload);
-  if (MOCA_RPC_FAILED(st = checkExceptionCode(env))) {
+  if (MOCHA_RPC_FAILED(st = checkExceptionCode(env))) {
     goto cleanupExit;
   }
 
@@ -343,7 +343,7 @@ cleanupExit:
 
 static void runtimeException(JNIEnv *env, int32_t code)
 {
-  if (MOCA_RPC_FAILED(code) && code != RPC_JAVA_EXCEPTION) {
+  if (MOCHA_RPC_FAILED(code) && code != RPC_JAVA_EXCEPTION) {
     env->ThrowNew(runtimeExceptionClass, jniErrorString(code));
   }
 }
@@ -365,7 +365,7 @@ getClassGlobal(JNIEnv *env, const char *classname, jclass *clz)
 {
   jclass clazz;
 
-  MOCA_RPC_DO(getClass(env, classname, &clazz))
+  MOCHA_RPC_DO(getClass(env, classname, &clazz))
   *clz = reinterpret_cast<jclass>(env->NewGlobalRef(clazz));
   env->DeleteLocalRef(clazz);
   return checkExceptionCode(env);
@@ -424,54 +424,54 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved)
   env = static_cast<JNIEnv *>(tmp);
 
   LOG_TRACE("Loading java/lang/RuntimeException");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/RuntimeException", &runtimeExceptionClass), error)
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/RuntimeException", &runtimeExceptionClass), error)
   LOG_TRACE("Loading java/lang/InterruptedException");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/InterruptedException", &interruptedExceptionClass), error)
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/InterruptedException", &interruptedExceptionClass), error)
   LOG_TRACE("Loading java/lang/String");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/String", &stringClass), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/KeyValuePair");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/protocol/KeyValuePair", &keyValuePairClass), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannel");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/protocol/impl/JniChannel", &channelClass), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/protocol/impl/JniChannelNano", &channelNanoClass), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelEasy");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/protocol/impl/JniChannelEasy", &channelEasyClass), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/ChannelEasy$Request");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/protocol/ChannelEasy$Request", &channelEasyRequestClass), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/ChannelEasy$Response");
-  MOCA_RPC_DO_GOTO(code, getClassGlobal(env, "com/moca/rpc/protocol/ChannelEasy$Response", &channelEasyResponseClass), error)
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "java/lang/String", &stringClass), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/KeyValuePair");
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "com/mocha/rpc/protocol/KeyValuePair", &keyValuePairClass), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannel");
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "com/mocha/rpc/protocol/impl/JniChannel", &channelClass), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano");
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "com/mocha/rpc/protocol/impl/JniChannelNano", &channelNanoClass), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelEasy");
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "com/mocha/rpc/protocol/impl/JniChannelEasy", &channelEasyClass), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/ChannelEasy$Request");
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "com/mocha/rpc/protocol/ChannelEasy$Request", &channelEasyRequestClass), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/ChannelEasy$Response");
+  MOCHA_RPC_DO_GOTO(code, getClassGlobal(env, "com/mocha/rpc/protocol/ChannelEasy$Response", &channelEasyResponseClass), error)
 
-  LOG_TRACE("Loading com/moca/rpc/protocol/KeyValuePair <init> (Ljava/lang/String;Ljava/lang/String;)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V", &keyValuePairConstructorMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/KeyValuePair getKey ()Ljava/lang/String;");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getKey", "()Ljava/lang/String;", &keyValuePairGetKeyMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/KeyValuePair getValue ()Ljava/lang/String;");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getValue", "()Ljava/lang/String;", &keyValuePairGetValueMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchRequestEvent (JI[Lcom/moca/rpc/protocol/KeyValuePair;I)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchRequestEvent", "(JI[Lcom/moca/rpc/protocol/KeyValuePair;I)V", &channelNanoDispatchRequestMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchResponseEvent (JI[Lcom/moca/rpc/protocol/KeyValuePair;I)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchResponseEvent", "(JI[Lcom/moca/rpc/protocol/KeyValuePair;I)V", &channelNanoDispatchResponseMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchPayloadEvent (JI[BZ)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchPayloadEvent", "(JI[BZ)V", &channelNanoDispatchPayloadMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchConnectedEvent ()V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchConnectedEvent", "()V", &channelNanoDispatchConnectedMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchEstablishedEvent ()V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchEstablishedEvent", "()V", &channelNanoDispatchEstablishedMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchDisconnectedEvent ()V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchDisconnectedEvent", "()V", &channelNanoDispatchDisconnectedMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano dispatchErrorEvent (ILjava/lang/String;)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchErrorEvent", "(ILjava/lang/String;)V", &channelNanoDispatchErrorMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano handle, J");
-  MOCA_RPC_DO_GOTO(code, getFieldID(env, channelClass, "handle", "J", &channelHandleField), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano globalRef, J");
-  MOCA_RPC_DO_GOTO(code, getFieldID(env, channelClass, "globalRef", "J", &channelGlobalRefField), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/impl/JniChannelNano toString ([B)Ljava/lang/String;");
-  MOCA_RPC_DO_GOTO(code, getStaticMethodID(env, channelClass, "toString", "([B)Ljava/lang/String;", &channelToStringMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/ChannelEasy$Request <init> (JI[Lcom/moca/rpc/protocol/KeyValuePair;[B)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelEasyRequestClass, "<init>", "(JI[Lcom/moca/rpc/protocol/KeyValuePair;[B)V", &channelEasyRequestConstructorMethod), error)
-  LOG_TRACE("Loading com/moca/rpc/protocol/ChannelEasy$Response <init> (JI[Lcom/moca/rpc/protocol/KeyValuePair;[B)V");
-  MOCA_RPC_DO_GOTO(code, getMethodID(env, channelEasyResponseClass, "<init>", "(JI[Lcom/moca/rpc/protocol/KeyValuePair;[B)V", &channelEasyResponseConstructorMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/KeyValuePair <init> (Ljava/lang/String;Ljava/lang/String;)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "<init>", "(Ljava/lang/String;Ljava/lang/String;)V", &keyValuePairConstructorMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/KeyValuePair getKey ()Ljava/lang/String;");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getKey", "()Ljava/lang/String;", &keyValuePairGetKeyMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/KeyValuePair getValue ()Ljava/lang/String;");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, keyValuePairClass, "getValue", "()Ljava/lang/String;", &keyValuePairGetValueMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchRequestEvent (JI[Lcom/mocha/rpc/protocol/KeyValuePair;I)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchRequestEvent", "(JI[Lcom/mocha/rpc/protocol/KeyValuePair;I)V", &channelNanoDispatchRequestMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchResponseEvent (JI[Lcom/mocha/rpc/protocol/KeyValuePair;I)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchResponseEvent", "(JI[Lcom/mocha/rpc/protocol/KeyValuePair;I)V", &channelNanoDispatchResponseMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchPayloadEvent (JI[BZ)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchPayloadEvent", "(JI[BZ)V", &channelNanoDispatchPayloadMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchConnectedEvent ()V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchConnectedEvent", "()V", &channelNanoDispatchConnectedMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchEstablishedEvent ()V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchEstablishedEvent", "()V", &channelNanoDispatchEstablishedMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchDisconnectedEvent ()V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchDisconnectedEvent", "()V", &channelNanoDispatchDisconnectedMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano dispatchErrorEvent (ILjava/lang/String;)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelNanoClass, "dispatchErrorEvent", "(ILjava/lang/String;)V", &channelNanoDispatchErrorMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano handle, J");
+  MOCHA_RPC_DO_GOTO(code, getFieldID(env, channelClass, "handle", "J", &channelHandleField), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano globalRef, J");
+  MOCHA_RPC_DO_GOTO(code, getFieldID(env, channelClass, "globalRef", "J", &channelGlobalRefField), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/impl/JniChannelNano toString ([B)Ljava/lang/String;");
+  MOCHA_RPC_DO_GOTO(code, getStaticMethodID(env, channelClass, "toString", "([B)Ljava/lang/String;", &channelToStringMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/ChannelEasy$Request <init> (JI[Lcom/mocha/rpc/protocol/KeyValuePair;[B)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelEasyRequestClass, "<init>", "(JI[Lcom/mocha/rpc/protocol/KeyValuePair;[B)V", &channelEasyRequestConstructorMethod), error)
+  LOG_TRACE("Loading com/mocha/rpc/protocol/ChannelEasy$Response <init> (JI[Lcom/mocha/rpc/protocol/KeyValuePair;[B)V");
+  MOCHA_RPC_DO_GOTO(code, getMethodID(env, channelEasyResponseClass, "<init>", "(JI[Lcom/mocha/rpc/protocol/KeyValuePair;[B)V", &channelEasyResponseConstructorMethod), error)
 
   pthread_key_create(&tlsContext, NULL);
 
@@ -523,7 +523,7 @@ void dispatchPacketEvent(JNIEnv *env, int32_t eventType, RPCOpaqueData eventData
   int32_t code = RPC_OK;
   ErrorEventData error;
 
-  MOCA_RPC_DO_GOTO(code, convert(env, event->headers, &headers), error)
+  MOCHA_RPC_DO_GOTO(code, convert(env, event->headers, &headers), error)
   jmethodID method;
   switch (eventType) {
     case EVENT_TYPE_CHANNEL_REQUEST:
@@ -559,7 +559,7 @@ void dispatchPayloadEvent(JNIEnv *env, RPCOpaqueData eventData, jobject channel)
   int32_t code = RPC_OK;
   ErrorEventData error;
 
-  MOCA_RPC_DO_GOTO(code, convert(env, event->payload, event->size, &array), error)
+  MOCHA_RPC_DO_GOTO(code, convert(env, event->payload, event->size, &array), error)
   env->CallVoidMethod(channel, channelNanoDispatchPayloadMethod, event->id, event->code, array, static_cast<jboolean>(event->commit));
   goto cleanupExit;
 
@@ -621,7 +621,7 @@ void doGetAddress(JNIEnv *env, jlong handle, G get, jstring *address, jint *port
   StringLite str;
   uint16_t tmp = 0;
   int32_t code = (getChannel<C>(handle)->*get)(&str, &tmp);
-  if (MOCA_RPC_FAILED(code)) {
+  if (MOCHA_RPC_FAILED(code)) {
     runtimeException(env, code);
   } else {
     if (address != NULL) {
@@ -640,7 +640,7 @@ jstring doGetId(JNIEnv *env, jlong handle, G get)
   StringLite str;
   int32_t code = (getChannel<C>(handle)->*get)(&str);
   jstring result = NULL;
-  if (MOCA_RPC_FAILED(code)) {
+  if (MOCHA_RPC_FAILED(code)) {
     runtimeException(env, code);
   } else {
     convert(env, str.str(), &result);
@@ -648,7 +648,7 @@ jstring doGetId(JNIEnv *env, jlong handle, G get)
   return result;
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetLocalAddress(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doGetLocalAddress(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
 {
   jstring address = NULL;
   if (nano) {
@@ -659,7 +659,7 @@ JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetLocalA
   return address;
 }
 
-JNIEXPORT jint JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetLocalPort(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
+JNIEXPORT jint JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doGetLocalPort(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
 {
   jint port = 0;
   if (nano) {
@@ -670,7 +670,7 @@ JNIEXPORT jint JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetLocalPort
   return port;
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetLocalId(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doGetLocalId(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
 {
   if (nano) {
     return doGetId<RPCChannelNano, NanoGetId>(env, handle, &RPCChannelNano::localId);
@@ -679,7 +679,7 @@ JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetLocalI
   }
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetRemoteAddress(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doGetRemoteAddress(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
 {
   jstring address = NULL;
   if (nano) {
@@ -690,7 +690,7 @@ JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetRemote
   return address;
 }
 
-JNIEXPORT jint JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetRemotePort(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
+JNIEXPORT jint JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doGetRemotePort(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
 {
   jint port = 0;
   if (nano) {
@@ -701,7 +701,7 @@ JNIEXPORT jint JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetRemotePor
   return port;
 }
 
-JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetRemoteId(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
+JNIEXPORT jstring JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doGetRemoteId(JNIEnv *env, jclass clazz, jboolean nano, jlong handle)
 {
   if (nano) {
     return doGetId<RPCChannelNano, NanoGetId>(env, handle, &RPCChannelNano::remoteId);
@@ -710,7 +710,7 @@ JNIEXPORT jstring JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doGetRemote
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doDestroy(JNIEnv *env, jclass clazz, jboolean nano, jobject channel, jlong handle)
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doDestroy(JNIEnv *env, jclass clazz, jboolean nano, jobject channel, jlong handle)
 {
   TlsContextHelper helper(env);
   jlong ref = env->GetLongField(channel, channelGlobalRefField);
@@ -724,34 +724,34 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doDestroy(JNIE
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannelNano_doLoop(JNIEnv *env, jclass clazz, jlong handle, jint flags)
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannelNano_doLoop(JNIEnv *env, jclass clazz, jlong handle, jint flags)
 {
   TlsContextHelper helper(env);
   int32_t code = getChannel<RPCChannelNano>(handle)->loop(flags);
-  if (MOCA_RPC_FAILED(code)) {
+  if (MOCHA_RPC_FAILED(code)) {
     runtimeException(env, code);
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannelNano_doBreakLoop(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannelNano_doBreakLoop(JNIEnv *env, jclass clazz, jlong handle)
 {
   TlsContextHelper helper(env);
   int32_t code = getChannel<RPCChannelNano>(handle)->breakLoop();
-  if (MOCA_RPC_FAILED(code)) {
+  if (MOCHA_RPC_FAILED(code)) {
     runtimeException(env, code);
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannelNano_doKeepAlive(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannelNano_doKeepAlive(JNIEnv *env, jclass clazz, jlong handle)
 {
   TlsContextHelper helper(env);
   int32_t code = getChannel<RPCChannelNano>(handle)->keepalive();
-  if (MOCA_RPC_FAILED(code)) {
+  if (MOCHA_RPC_FAILED(code)) {
     runtimeException(env, code);
   }
 }
 
-JNIEXPORT jobject JNICALL Java_com_moca_rpc_protocol_impl_JniChannelEasy_doPoll(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT jobject JNICALL Java_com_mocha_rpc_protocol_impl_JniChannelEasy_doPoll(JNIEnv *env, jclass clazz, jlong handle)
 {
   TlsContextHelper helper(env);
   jobject result = NULL;
@@ -762,7 +762,7 @@ JNIEXPORT jobject JNICALL Java_com_moca_rpc_protocol_impl_JniChannelEasy_doPoll(
   size_t payloadSize;
   bool isResponse;
   int32_t st = getChannel<RPCChannelEasy>(handle)->poll(&id, &code, &headers, &payload, &payloadSize, &isResponse);
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     if (st == RPC_WOULDBLOCK) {
       interruptedException(env);
     } else {
@@ -774,16 +774,16 @@ JNIEXPORT jobject JNICALL Java_com_moca_rpc_protocol_impl_JniChannelEasy_doPoll(
   return result;
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannelEasy_doInterrupt(JNIEnv *env, jclass clazz, jlong handle)
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannelEasy_doInterrupt(JNIEnv *env, jclass clazz, jlong handle)
 {
   TlsContextHelper helper(env);
   int32_t code = getChannel<RPCChannelEasy>(handle)->interrupt();
-  if (MOCA_RPC_FAILED(code)) {
+  if (MOCHA_RPC_FAILED(code)) {
     runtimeException(env, code);
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doResponse(JNIEnv *env, jclass clazz, jboolean nano,
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doResponse(JNIEnv *env, jclass clazz, jboolean nano,
     jlong handle, jlong id, jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
   TlsContextHelper helper(env);
@@ -792,7 +792,7 @@ JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doResponse(JNI
   KeyValuePairs<StringLite, StringLite> realPairs;
   uint8_t *rawPayload = NULL;
   if (headers) {
-    MOCA_RPC_DO_GOTO(st, convert(env, headers, &realPairs), error);
+    MOCHA_RPC_DO_GOTO(st, convert(env, headers, &realPairs), error);
     pairs = &realPairs;
   }
   if (payload) {
@@ -823,7 +823,7 @@ cleanupExit:
   return;
 }
 
-JNIEXPORT jlong JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doRequest(JNIEnv *env, jclass clazz, jboolean nano,
+JNIEXPORT jlong JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doRequest(JNIEnv *env, jclass clazz, jboolean nano,
     jlong handle, jint code, jobjectArray headers, jbyteArray payload, jint offset, jint size)
 {
   TlsContextHelper helper(env);
@@ -833,7 +833,7 @@ JNIEXPORT jlong JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doRequest(JNI
   KeyValuePairs<StringLite, StringLite> realPairs;
   uint8_t *rawPayload = NULL;
   if (headers) {
-    MOCA_RPC_DO_GOTO(st, convert(env, headers, &realPairs), error);
+    MOCHA_RPC_DO_GOTO(st, convert(env, headers, &realPairs), error);
     pairs = &realPairs;
   }
   if (payload) {
@@ -887,7 +887,7 @@ int32_t doCreateEasy(JNIEnv *env, const char *address, jlong timeout, jlong keep
   }
 }
 
-JNIEXPORT void JNICALL Java_com_moca_rpc_protocol_impl_JniChannel_doCreate
+JNIEXPORT void JNICALL Java_com_mocha_rpc_protocol_impl_JniChannel_doCreate
   (JNIEnv *env, jclass clazz, jboolean nano, jstring address, jlong timeout, jlong keepalive, jobject jchannel)
 {
   TlsContextHelper helper(env);

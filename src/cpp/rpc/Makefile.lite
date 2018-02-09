@@ -4,14 +4,14 @@ BUILD_DIR ?= $(PROJECT_HOME)/build/make
 OUTDIR_SUFFIX = .lite
 include $(BUILD_DIR)/make.defs
 
-CPPFLAGS += -DMOCA_RPC_LITE
+CPPFLAGS += -DMOCHA_RPC_LITE
 CPPSRCS += RPCProtocol.cc RPCChannelNano.cc RPCChannelEasy.cc RPCLogging.cc RPCLite.cc RPCNano.cc RPCChannel.cc \
 	RPCClientChannel.cc RPCServerChannel.cc RPCDispatcher.cc RPCProtocolC.cc \
 	RPCChannelC.cc RPCDispatcherC.cc RPCServer.cc RPCServerC.cc RPCThreadPool.cc
 INCLUDE_DIRS += ../include $(LIBUV_ROOT)/include
 
-SOTARGET = MocaRPCLite
-LIB_NAME = MocaRPCLite
+SOTARGET = MochaRPCLite
+LIB_NAME = MochaRPCLite
 
 DEPLIBS += z dl
 

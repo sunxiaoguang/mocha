@@ -1,9 +1,9 @@
-#ifndef __MOCA_RPC_SERVER_CHANNEL_INTERNAL_H__
-#define __MOCA_RPC_SERVER_CHANNEL_INTERNAL_H__
+#ifndef __MOCHA_RPC_SERVER_CHANNEL_INTERNAL_H__
+#define __MOCHA_RPC_SERVER_CHANNEL_INTERNAL_H__
 
 #include "RPCChannel.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCServerChannel : public RPCChannelImpl
 {
@@ -50,6 +50,6 @@ public:
   static void onNewConnection(uv_stream_t *server, int status);
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
 #endif

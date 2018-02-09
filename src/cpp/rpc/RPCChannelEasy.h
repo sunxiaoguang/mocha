@@ -1,7 +1,7 @@
-#ifndef __MOCA_RPC_EASY_CHANNEL_INTERNAL_H__
-#define __MOCA_RPC_EASY_CHANNEL_INTERNAL_H__
+#ifndef __MOCHA_RPC_EASY_CHANNEL_INTERNAL_H__
+#define __MOCHA_RPC_EASY_CHANNEL_INTERNAL_H__
 
-#include "moca/rpc/RPCChannelEasy.h"
+#include "mocha/rpc/RPCChannelEasy.h"
 #include "RPCChannelNano.h"
 #include "RPCNano.h"
 #include <poll.h>
@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCChannelEasyBuilder : private RPCNonCopyable
 {
@@ -117,7 +117,7 @@ private:
   RPCOpaqueData loggerUserData_;
   volatile mutable int32_t status_;
   mutable pthread_mutex_t mutex_;
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
   mutable KeyValueMap headersMap_;
 #endif
 
@@ -159,11 +159,11 @@ public:
   int32_t request(int64_t *id, int32_t code, const T *headers, const void *payload, size_t payloadSize,
                   int32_t *responseCode, const T **responseHeaders, const void **responsePayload, size_t *responsePayloadSize) const;
   int32_t poll(int64_t *id, int32_t *code, const KeyValuePairs<StringLite, StringLite> **headers, const void **payload, size_t *payloadSize, bool *isResponse) const;
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
   int32_t request(int64_t *id, int32_t code, const KeyValueMap *headers = NULL, const void *payload = NULL, size_t payloadSize = 0) const;
   int32_t poll(int64_t *id, int32_t *code, const KeyValueMap **headers, const void **payload, size_t *payloadSize, bool *isResponse) const;
 #endif
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 #endif

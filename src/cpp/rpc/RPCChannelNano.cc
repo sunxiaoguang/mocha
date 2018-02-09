@@ -17,7 +17,7 @@
 #define IOV_MAX (8)
 #endif
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 RPCChannelNano::RPCChannelNano(RPCChannelNanoImpl *impl) : impl_(impl)
 {
@@ -51,7 +51,7 @@ RPCChannelNano::request(int64_t *id, int32_t code, const KeyValuePairs<StringLit
   return impl_->request(id, code, headers, payload, payloadSize);
 }
 
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
 void convert(const KeyValueMap *from, KeyValuePairs<StringLite, StringLite> *to);
 
 int32_t
@@ -491,7 +491,7 @@ RPCChannelNanoImpl::doRead()
   if (total > 0) {
     protocol_.onRead(total);
   }
-  if (MOCA_RPC_FAILED(st) && st != RPC_WOULDBLOCK) {
+  if (MOCHA_RPC_FAILED(st) && st != RPC_WOULDBLOCK) {
     st = protocol_.processErrorHook(st);
   }
   return st;
@@ -521,7 +521,7 @@ RPCChannelNanoImpl::init(const StringLite &id, int64_t timeout, int64_t keepaliv
   int32_t rc;
   timeout_ = timeout < SECOND / 1000 ? SECOND / 1000 : timeout;
   keepalive_ = keepalive < SECOND / 100 ? SECOND / 100 : keepalive;
-  if (MOCA_RPC_FAILED(rc = initMultiThread())) {
+  if (MOCHA_RPC_FAILED(rc = initMultiThread())) {
     RPC_LOG_ERROR("Could not initialize threading support. %d", rc);
     return rc;
   }
@@ -533,7 +533,7 @@ RPCChannelNanoImpl::init(const StringLite &id, int64_t timeout, int64_t keepaliv
   }
   fdset_[0].fd = pipe_[0];
   fdset_[0].events = POLLIN;
-  if (MOCA_RPC_FAILED(rc = protocol_.init(id, logger_, level_, loggerUserData_, protocolFlags, limit, channelFlags))) {
+  if (MOCHA_RPC_FAILED(rc = protocol_.init(id, logger_, level_, loggerUserData_, protocolFlags, limit, channelFlags))) {
     RPC_LOG_ERROR("Could not initialize rpc protocol. %d", rc);
     return rc;
   }
@@ -632,7 +632,7 @@ RPCChannelNanoImpl::loop(int32_t flags)
   while (isRunning() && st == RPC_OK && fdset_[0].fd != -1 && fdset_[1].fd != -1) {
     fdset_[0].revents = 0;
     fdset_[1].revents = 0;
-    if (MOCA_RPC_FAILED(st = checkAndSendPendingPackets()) && st != RPC_WOULDBLOCK) {
+    if (MOCHA_RPC_FAILED(st = checkAndSendPendingPackets()) && st != RPC_WOULDBLOCK) {
       break;
     }
     st = poll(fdset_, 2, realTimeout);
@@ -775,8 +775,8 @@ RPCChannelNanoImpl::create(const StringLite &address, const StringLite &id, int6
       listener, userData, eventMask, attachment, attachmentDestructor);
   RPCChannelNano *channel = impl->wrap();
   int32_t st;
-  MOCA_RPC_DO_GOTO(st, impl->init(id, timeout, keepalive, flags, limit, protocolFlags), cleanupExit);
-  MOCA_RPC_DO_GOTO(st, impl->connect(address.str()), cleanupExit);
+  MOCHA_RPC_DO_GOTO(st, impl->init(id, timeout, keepalive, flags, limit, protocolFlags), cleanupExit);
+  MOCHA_RPC_DO_GOTO(st, impl->connect(address.str()), cleanupExit);
   return channel;
 cleanupExit:
   channel->release();
@@ -1011,4 +1011,4 @@ RPCChannelNanoBuilder::build()
 }
 
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

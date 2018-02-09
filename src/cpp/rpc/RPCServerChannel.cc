@@ -3,7 +3,7 @@
 #include "RPCDispatcher.h"
 #include <assert.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 struct TimerEventArgument
 {
@@ -253,4 +253,4 @@ RPCServerChannel::checkTimeout(RPCClientChannel *channel, RPCOpaqueData userData
   }
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

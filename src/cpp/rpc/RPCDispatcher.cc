@@ -1,6 +1,6 @@
 #include "RPCDispatcher.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 RPCDispatcher::Builder::Builder(RPCDispatcherBuilder *impl) : impl_(impl)
 {
 }
@@ -82,7 +82,7 @@ RPCDispatcher::submitAsync(AsyncTask task, RPCOpaqueData userData)
   asyncTask->userData = userData;
   asyncTask->dispatcher = this;
   int32_t st = impl_->submitAsync(asyncTaskEntry, asyncTask);
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     free(asyncTask);
   }
   return st;
@@ -206,7 +206,7 @@ void
 RPCDispatcherImpl::onAsyncTask()
 {
   int32_t st;
-  if (MOCA_RPC_FAILED(st = asyncQueue_.dequeue(fireAsyncTask, this))) {
+  if (MOCHA_RPC_FAILED(st = asyncQueue_.dequeue(fireAsyncTask, this))) {
     RPC_LOG_ERROR("Could not dequeue async task from queue. %d:%s", st, errorString(st));
   }
 }
@@ -260,7 +260,7 @@ RPCDispatcherImpl::createPoll(RPCDispatcherPoll **poll, RPCDispatcher::Pollable 
 {
   int32_t st;
   RPCDispatcherPoll *tmp = static_cast<RPCDispatcherPoll *>(malloc(sizeof(RPCDispatcherPoll)));
-  MOCA_RPC_CHECK_MEMORY(tmp)
+  MOCHA_RPC_CHECK_MEMORY(tmp)
   tmp->pollable = pollable;
   tmp->listener = listener;
   tmp->events = events;
@@ -269,7 +269,7 @@ RPCDispatcherImpl::createPoll(RPCDispatcherPoll **poll, RPCDispatcher::Pollable 
   tmp->flags = 0;
   memset(&tmp->handle, 0, sizeof(tmp->handle));
 
-  if (MOCA_RPC_FAILED(st = submitAsync(onAsyncPollStart, tmp, (int32_t) pollable))) {
+  if (MOCHA_RPC_FAILED(st = submitAsync(onAsyncPollStart, tmp, (int32_t) pollable))) {
     free(tmp);
   } else {
     *poll = tmp;
@@ -316,7 +316,7 @@ RPCDispatcherImpl::onAsyncPollDestroy(RPCOpaqueData data)
 int32_t
 RPCDispatcherImpl::destroyPoll(RPCDispatcherPoll *poll)
 {
-  MOCA_RPC_CHECK_ARGUMENT(poll)
+  MOCHA_RPC_CHECK_ARGUMENT(poll)
   return submitAsync(onAsyncPollDestroy, poll, (int32_t) poll->pollable);
 }
 
@@ -389,7 +389,7 @@ RPCDispatcherImpl::createTimer(RPCDispatcherTimer **timer, int32_t flags, int64_
 {
   int32_t st;
   RPCDispatcherTimer *tmp = static_cast<RPCDispatcherTimer *>(malloc(sizeof(RPCDispatcherTimer)));
-  MOCA_RPC_CHECK_MEMORY(tmp)
+  MOCHA_RPC_CHECK_MEMORY(tmp)
   tmp->listener = listener;
   tmp->userData = userData;
   tmp->dispatcher = this;
@@ -397,7 +397,7 @@ RPCDispatcherImpl::createTimer(RPCDispatcherTimer **timer, int32_t flags, int64_
   tmp->repeat = ((flags & RPCDispatcher::TIMER_FLAG_REPEAT) == RPCDispatcher::TIMER_FLAG_REPEAT) ? timeout : 0;
   memset(&tmp->handle, 0, sizeof(tmp->handle));
 
-  if (MOCA_RPC_FAILED(st = submitAsync(onAsyncTimerCreate, tmp, static_cast<int32_t>(reinterpret_cast<intptr_t>(tmp) >> 3)))) {
+  if (MOCHA_RPC_FAILED(st = submitAsync(onAsyncTimerCreate, tmp, static_cast<int32_t>(reinterpret_cast<intptr_t>(tmp) >> 3)))) {
     free(tmp);
   } else {
     *timer = tmp;
@@ -408,7 +408,7 @@ RPCDispatcherImpl::createTimer(RPCDispatcherTimer **timer, int32_t flags, int64_
 int32_t
 RPCDispatcherImpl::destroyTimer(RPCDispatcherTimer *timer)
 {
-  MOCA_RPC_CHECK_ARGUMENT(timer)
+  MOCHA_RPC_CHECK_ARGUMENT(timer)
   return submitAsync(onAsyncTimerDestroy, timer, static_cast<int32_t>(reinterpret_cast<intptr_t>(timer) >> 3));
 }
 
@@ -435,7 +435,7 @@ RPCDispatcherImpl::init()
     uv_free_cpu_info(cpu, ncpu);
   }
   numCores_ = ncpu;
-  if (MOCA_RPC_FAILED(st = asyncQueue_.init(numCores_, 1024))) {
+  if (MOCHA_RPC_FAILED(st = asyncQueue_.init(numCores_, 1024))) {
     return st;
   }
   return asyncToken_.init();
@@ -457,7 +457,7 @@ int32_t
 RPCDispatcherImpl::submitAsync(RPCAsyncTask task, RPCOpaqueData data)
 {
   int32_t st = asyncQueue_.enqueue(task, data);
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     return st;
   }
   if ((st = uv_async_send(&async_))) {
@@ -470,7 +470,7 @@ int32_t
 RPCDispatcherImpl::submitAsync(RPCAsyncTask task, RPCOpaqueData data, int32_t key)
 {
   int32_t st = asyncQueue_.enqueue(task, data, key);
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     return st;
   }
   if ((st = uv_async_send(&async_))) {
@@ -614,7 +614,7 @@ int32_t
 RPCDispatcherThread::shutdown()
 {
   int32_t st = interrupt();
-  if (MOCA_RPC_FAILED(st)) {
+  if (MOCHA_RPC_FAILED(st)) {
     return st;
   }
 
@@ -645,4 +645,4 @@ RPCDispatcherThread::release()
   return impl_->release();
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

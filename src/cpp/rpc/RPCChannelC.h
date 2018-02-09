@@ -1,17 +1,17 @@
-#ifndef __MOCA_RPC_CHANNEL_C_INTERNAL_H__
-#define __MOCA_RPC_CHANNEL_C_INTERNAL_H__
-#include <moca/rpc-c/RPCChannel.h>
-#include <moca/rpc/RPCChannel.h>
+#ifndef __MOCHA_RPC_CHANNEL_C_INTERNAL_H__
+#define __MOCHA_RPC_CHANNEL_C_INTERNAL_H__
+#include <mocha/rpc-c/RPCChannel.h>
+#include <mocha/rpc/RPCChannel.h>
 #include "RPCLite.h"
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
-struct MocaRPCChannel : MocaRPCWrapper
+struct MochaRPCChannel : MochaRPCWrapper
 {
   RPCChannel *impl;
-  volatile MocaRPCEventListener listener;
-  MocaRPCOpaqueData userData;
+  volatile MochaRPCEventListener listener;
+  MochaRPCOpaqueData userData;
   int32_t eventMask;
 };
 
-#endif /* __MOCA_RPC_CHANNEL_C_INTERNAL_H__ */
+#endif /* __MOCHA_RPC_CHANNEL_C_INTERNAL_H__ */

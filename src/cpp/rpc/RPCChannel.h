@@ -1,12 +1,12 @@
-#ifndef __MOCA_RPC_CHANNEL_INTERNAL_H__
-#define __MOCA_RPC_CHANNEL_INTERNAL_H__ 1
+#ifndef __MOCHA_RPC_CHANNEL_INTERNAL_H__
+#define __MOCHA_RPC_CHANNEL_INTERNAL_H__ 1
 
-#include <moca/rpc/RPCChannel.h>
+#include <mocha/rpc/RPCChannel.h>
 #include "RPC.h"
 
 #define RPC_INVALID_CHANNEL_ID (0xFFFFFFFFFFFFFFFFL)
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 class RPCServerChannel;
 class RPCClientChannel;
@@ -196,7 +196,7 @@ public:
     return key_;
   }
 
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
   int32_t localAddress(string *localAddress, uint16_t *port = NULL) const
   {
     StringLite tmp;
@@ -272,5 +272,5 @@ public:
   RPCChannel *build();
 };
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 #endif

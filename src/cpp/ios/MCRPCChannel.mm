@@ -1,8 +1,8 @@
 #import "MCRPCChannel.h"
-#import <moca/rpc/RPCChannelNano.h>
-#import <moca/rpc/RPCChannelEasy.h>
+#import <mocha/rpc/RPCChannelNano.h>
+#import <mocha/rpc/RPCChannelEasy.h>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 
 void convert(const NSArray *src, KeyValuePairs<StringLite, StringLite>* dest)
 {
@@ -36,7 +36,7 @@ void rpcLogger(RPCLogLevel level, RPCOpaqueData userData, const char *func, cons
 }
 
 void rpcEventListener(const RPCChannelNano *channelC, int32_t eventType,
-    RPCOpaqueData eventData, ::moca::rpc::RPCOpaqueData userData);
+    RPCOpaqueData eventData, ::mocha::rpc::RPCOpaqueData userData);
 @interface MCRPCSimpleLogger : NSObject
 {
   RPCSimpleLoggerSink simpleLoggerSink;
@@ -123,7 +123,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 {
   StringLite tmp;
   int32_t st = channel->localAddress(&tmp, port);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *address = [NSString stringWithUTF8String:tmp.str()];
   }
   return st;
@@ -136,7 +136,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 {
   StringLite tmp;
   int32_t st = channel->remoteAddress(&tmp, port);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *address = [NSString stringWithUTF8String:tmp.str()];
   }
   return st;
@@ -149,7 +149,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 {
   StringLite tmp;
   int32_t st = channel->localId(&tmp);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *id = [NSString stringWithUTF8String:tmp.str()];
   }
   return st;
@@ -158,7 +158,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 {
   StringLite tmp;
   int32_t st = channel->remoteId(&tmp);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *id = [NSString stringWithUTF8String:tmp.str()];
   }
   return st;
@@ -268,7 +268,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 {
   StringLite tmp;
   int32_t st = (channel->*method)(&tmp);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *id = [NSString stringWithUTF8String:tmp.str()];
   }
   return st;
@@ -277,7 +277,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 {
   StringLite tmp;
   int32_t st = (channel->*method)(&tmp, port);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *address = [NSString stringWithUTF8String:tmp.str()];
   }
   return st;
@@ -356,7 +356,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
   } else {
     st = channel->request(code, static_cast<KeyValuePairs<StringLite, StringLite> *>(NULL), payload, payloadSize, responseCode, &tmpHeaders, responsePayload, &size);
   }
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *responsePayloadSize = static_cast<int32_t>(size);
     *responseHeaders = convert(tmpHeaders);
   }
@@ -398,7 +398,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
   const KeyValuePairs<StringLite, StringLite> *tmpHeaders;
   size_t size;
   st = channel->poll(id, code, &tmpHeaders, payload, &size, isResponse);
-  if (!MOCA_RPC_FAILED(st)) {
+  if (!MOCHA_RPC_FAILED(st)) {
     *headers = convert(tmpHeaders);
   }
   return st;
@@ -530,7 +530,7 @@ static MCRPCDefaultLogger *defaultLogger = [MCRPCDefaultLogger alloc];
 @end
 
 void rpcEventListener(const RPCChannelNano *channelC, int32_t eventType,
-    RPCOpaqueData eventData, ::moca::rpc::RPCOpaqueData userData)
+    RPCOpaqueData eventData, ::mocha::rpc::RPCOpaqueData userData)
 {
   MCRPCChannelNano *channel = (__bridge MCRPCChannelNano *) userData;
   switch (eventType) {

@@ -1,18 +1,18 @@
-#ifndef __MOCA_RPC_LITE_INTERNAL_H__
-#define __MOCA_RPC_LITE_INTERNAL_H__ 1
+#ifndef __MOCHA_RPC_LITE_INTERNAL_H__
+#define __MOCHA_RPC_LITE_INTERNAL_H__ 1
 
-#include "moca/rpc/RPC.h"
+#include "mocha/rpc/RPC.h"
 #include "uv.h"
 #include <poll.h>
 #include <pthread.h>
 
 #include "RPCNano.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 int32_t convertUVError(int32_t st, RPCLogger logger, RPCLogLevel level, RPCOpaqueData userData, const char *func, const char *file, uint32_t line);
 #define CONVERT_UV_ERROR(st, uvst, logger, level, userData)                                             \
   do {                                                                                                  \
-    st = ::moca::rpc::convertUVError(uvst, logger, level, userData, __FUNCTION__, __FILE__, __LINE__);  \
+    st = ::mocha::rpc::convertUVError(uvst, logger, level, userData, __FUNCTION__, __FILE__, __LINE__);  \
   } while (false)
 
 template<typename K, typename V, typename H, typename E>
@@ -348,21 +348,21 @@ public:
   int32_t dequeue(RPCAsyncTaskSink sink, RPCOpaqueData sinkUserData);
 };
 
-struct MocaRPCWrapper {
+struct MochaRPCWrapper {
   int32_t refcount;
-  MocaRPCKeyValuePairs *headers;
-  MocaRPCKeyValuePairs *buffer;
-  MocaRPCKeyValuePairs empty[1];
-  MocaRPCOpaqueData attachment;
-  MocaRPCOpaqueDataDestructor attachmentDestructor;
+  MochaRPCKeyValuePairs *headers;
+  MochaRPCKeyValuePairs *buffer;
+  MochaRPCKeyValuePairs empty[1];
+  MochaRPCOpaqueData attachment;
+  MochaRPCOpaqueDataDestructor attachmentDestructor;
 };
 
-void convert(const MocaRPCKeyValuePairs *from, KeyValuePairs<StringLite, StringLite> *to);
-void convertSink(int32_t index, MocaRPCKeyValuePair *to, void *userData);
-void convert(const KeyValuePairs<StringLite, StringLite> *from, MocaRPCWrapper *wrapper);
-void destroyAttachment(MocaRPCWrapper *wrapper);
-void destroy(MocaRPCWrapper *wrapper);
+void convert(const MochaRPCKeyValuePairs *from, KeyValuePairs<StringLite, StringLite> *to);
+void convertSink(int32_t index, MochaRPCKeyValuePair *to, void *userData);
+void convert(const KeyValuePairs<StringLite, StringLite> *from, MochaRPCWrapper *wrapper);
+void destroyAttachment(MochaRPCWrapper *wrapper);
+void destroy(MochaRPCWrapper *wrapper);
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
 #endif

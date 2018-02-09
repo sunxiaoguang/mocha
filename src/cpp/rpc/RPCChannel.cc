@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <assert.h>
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 RPCChannel::Builder *
 RPCChannel::newBuilder()
@@ -378,11 +378,11 @@ RPCChannelImpl::onResolved(int32_t st, struct addrinfo *res)
     goto cleanupExit;
   }
 
-  if (MOCA_RPC_FAILED(st = initSocket(res->ai_addr->sa_family))) {
+  if (MOCHA_RPC_FAILED(st = initSocket(res->ai_addr->sa_family))) {
     goto cleanupExit;
   }
 
-  if (MOCA_RPC_FAILED(st = onResolved(res))) {
+  if (MOCHA_RPC_FAILED(st = onResolved(res))) {
     goto cleanupExit;
   }
 
@@ -670,7 +670,7 @@ RPCChannel::attachment() const
   return impl_->attachment();
 }
 
-#if !defined(MOCA_RPC_LITE) && !defined(MOCA_RPC_NANO)
+#if !defined(MOCHA_RPC_LITE) && !defined(MOCHA_RPC_NANO)
 void convert(const KeyValueMap *from, KeyValuePairs<StringLite, StringLite> *to);
 
 int32_t
@@ -731,4 +731,4 @@ RPCChannel::close()
   return impl_->close();
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

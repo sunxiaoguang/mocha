@@ -1,9 +1,9 @@
-#ifndef __MOCA_RPC_LOGGING_H__
-#define __MOCA_RPC_LOGGING_H__ 1
+#ifndef __MOCHA_RPC_LOGGING_H__
+#define __MOCHA_RPC_LOGGING_H__ 1
 
-#include "moca/rpc/RPC.h"
+#include "mocha/rpc/RPC.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 #define DEFAULT_LOG_LEVEL RPC_LOG_LEVEL_INFO
 //extern volatile RPCLogLevel defaultRPCSimpleLoggerLogLevel;
@@ -15,7 +15,7 @@ extern volatile RPCLogLevel defaultRPCLoggerLevel;
 extern RPCOpaqueData defaultRPCLoggerUserData;
 
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE
 
 #define LOGGER_TRACE_ENABLED(level) (level <= RPC_LOG_LEVEL_TRACE)
 #define LOGGER_DEBUG_ENABLED(level) (level <= RPC_LOG_LEVEL_DEBUG)

@@ -2,7 +2,7 @@
 #include "RPCChannel.h"
 #include "RPCDispatcher.h"
 
-BEGIN_MOCA_RPC_NAMESPACE
+BEGIN_MOCHA_RPC_NAMESPACE
 
 RPCServer::RPCServer(RPCServerImpl *impl) : impl_(impl)
 {
@@ -325,8 +325,8 @@ RPCServerImpl::RPCServerImpl()
 
 RPCServerImpl::~RPCServerImpl()
 {
-  if (listenerEventMask_ & MOCA_RPC_EVENT_TYPE_SERVER_DESTROYED) {
-    listener_(wrapper_, NULL, MOCA_RPC_EVENT_TYPE_SERVER_DESTROYED, NULL, listenerUserData_);
+  if (listenerEventMask_ & MOCHA_RPC_EVENT_TYPE_SERVER_DESTROYED) {
+    listener_(wrapper_, NULL, MOCHA_RPC_EVENT_TYPE_SERVER_DESTROYED, NULL, listenerUserData_);
   }
   if (dispatcher_) {
     dispatcher_->release();
@@ -422,7 +422,7 @@ RPCServerImpl::onEvent(RPCChannel *channel, int32_t eventType, RPCOpaqueData eve
       break;
     case EVENT_TYPE_CHANNEL_CREATED:
       if (!createEventDispatched_) {
-        listener_(wrapper_, channel, MOCA_RPC_EVENT_TYPE_SERVER_CREATED, eventData, listenerUserData_);
+        listener_(wrapper_, channel, MOCHA_RPC_EVENT_TYPE_SERVER_CREATED, eventData, listenerUserData_);
         createEventDispatched_ = true;
       }
       listener_(wrapper_, channel, eventType, eventData, listenerUserData_);
@@ -468,7 +468,7 @@ RPCServerImpl::init(RPCDispatcher *dispatcher, RPCChannel::Builder *builder, RPC
   connectRateLimitPerIp_ = connectRateLimitPerIp;
   if (threadPoolSize > 0) {
     threadPool_ = new RPCThreadPool(logger, loggerLevel, loggerUserData);
-    MOCA_RPC_DO(threadPool_->init(threadPoolSize));
+    MOCHA_RPC_DO(threadPool_->init(threadPoolSize));
   }
   dispatcher_ = dispatcher;
   dispatcher->addRef();
@@ -561,7 +561,7 @@ RPCServerImpl::shutdown()
   }
   if ((initializedFlags_ & TIMER_INITIALIZED) != 0) {
     addRef();
-    if (MOCA_RPC_FAILED(FriendHelper::getImpl<RPCDispatcherImpl>(dispatcher_)->submitAsync(onAsyncShutdown, this))) {
+    if (MOCHA_RPC_FAILED(FriendHelper::getImpl<RPCDispatcherImpl>(dispatcher_)->submitAsync(onAsyncShutdown, this))) {
       release();
     }
   }
@@ -672,10 +672,10 @@ RPCServerImpl::submitAsync(RPCChannel *channel, int32_t eventType, RPCOpaqueData
       break;
     case EVENT_TYPE_CHANNEL_DESTROYED:
       RPC_LOG_ERROR("Channel destroyed event may not be asynchronously submitted");
-      return MOCA_RPC_INVALID_ARGUMENT;
+      return MOCHA_RPC_INVALID_ARGUMENT;
     case EVENT_TYPE_SERVER_DESTROYED:
       RPC_LOG_ERROR("Server destroyed event may not be asynchronously submitted");
-      return MOCA_RPC_INVALID_ARGUMENT;
+      return MOCHA_RPC_INVALID_ARGUMENT;
     default:
       context = static_cast<AsyncTaskContext *>(malloc(sizeof(AsyncTaskContext)));
       context->eventData = NULL;
@@ -716,4 +716,4 @@ RPCServerImpl::submitAsync(RPCChannel *channel, RPCServerEventListener eventList
   return threadPool_->submit(asyncTaskEntry, context, channel != NULL ? FriendHelper::getImpl<RPCChannelImpl>(channel)->key() : 0);
 }
 
-END_MOCA_RPC_NAMESPACE
+END_MOCHA_RPC_NAMESPACE

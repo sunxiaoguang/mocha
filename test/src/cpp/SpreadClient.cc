@@ -1,9 +1,9 @@
-#include <moca/rpc/RPCChannelNano.h>
+#include <mocha/rpc/RPCChannelNano.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <cinttypes>
 
-using namespace moca::rpc;
+using namespace mocha::rpc;
 int64_t authRequestId = 0;
 
 void eventListener(const RPCChannelNano *channel, int32_t eventType, RPCOpaqueData eventData, RPCOpaqueData userData)
