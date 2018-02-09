@@ -1,4 +1,4 @@
-package mocharpc
+package mocha
 
 import (
 	"log"
