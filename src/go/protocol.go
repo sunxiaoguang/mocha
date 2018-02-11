@@ -132,6 +132,33 @@ type Packet struct {
 	flags   int32
 }
 
+type Response *Packet
+type Request *Packet
+
+func (p *Packet) isResponse() bool {
+	return p.tp == packetTypeResponse
+}
+
+func (p *Packet) IsResponse() Response {
+	if p.isResponse() {
+		return p
+	} else {
+		return nil
+	}
+}
+
+func (p *Packet) isRequest() bool {
+	return p.tp == packetTypeRequest
+}
+
+func (p *Packet) IsRequest() Request {
+	if p.isRequest() {
+		return p
+	} else {
+		return nil
+	}
+}
+
 func readPacketHeaderData(data []byte, endian binary.ByteOrder, logger *log.Logger) (header []PacketHeader, err error) {
 	var tmp []byte
 	limit := len(data)
@@ -293,7 +320,7 @@ func readStringBody(size int32, reader io.Reader, logger *log.Logger) (str strin
 	return
 }
 
-func (channel *Channel) serializePacketHeader(packet *Packet) []byte {
+func serializePacketHeader(packet *Packet) []byte {
 	lenBuffer := make([]byte, 4)
 	var buffer bytes.Buffer
 	if packet.Header == nil || len(packet.Header) == 0 {
@@ -314,8 +341,8 @@ func (channel *Channel) serializePacketHeader(packet *Packet) []byte {
 	return buffer.Bytes()
 }
 
-func (channel *Channel) doSendPacket(packet *Packet) (err error) {
-	header := channel.serializePacketHeader(packet)
+func (c *Channel) doSendPacket(packet *Packet) (err error) {
+	header := serializePacketHeader(packet)
 	headerLength := len(header)
 	payloadLength := 0
 	if packet.Payload != nil {
@@ -334,147 +361,148 @@ func (channel *Channel) doSendPacket(packet *Packet) (err error) {
 	if payloadLength > 0 {
 		copy(buffer[24+headerLength:length], packet.Payload)
 	}
-	_, err = channel.conn.Write(buffer)
+	_, err = c.conn.Write(buffer)
 	return
 }
 
-func (channel *Channel) updateReadTime() {
-	atomic.StoreInt64(&channel.lastReadTime, time.Now().UnixNano())
+func (c *Channel) updateReadTime() {
+	atomic.StoreInt64(&c.lastReadTime, time.Now().UnixNano())
 }
 
-func (channel *Channel) onKeepalive() {
+
+func (c *Channel) onKeepalive() {
 }
 
-func (channel *Channel) onHint(packet *Packet) {
+func (c *Channel) onHint(packet *Packet) {
 	switch packet.Code {
 	case HintTypeKeepalive:
-		channel.onKeepalive()
+		c.onKeepalive()
 	}
 }
 
-func (channel *Channel) onRequest(packet *Packet) {
-	atomic.AddInt32(&channel.barrier, 1)
-	defer atomic.AddInt32(&channel.barrier, -1)
-	if channel.running() {
-		channel.Request <- packet
-	}
+func (c *Channel) onRequest(request Request) {
+	c.ensure(func() {
+		if c.running() {
+			c.request <- request
+		}
+	})
 }
 
-func (channel *Channel) onResponse(packet *Packet) {
-	atomic.AddInt32(&channel.barrier, 1)
-	defer atomic.AddInt32(&channel.barrier, -1)
-	if channel.running() {
-		channel.Response <- packet
-	}
+func (c *Channel) onResponse(response Response) {
+	c.ensure(func() {
+		if c.running() {
+			c.response <- response
+		}
+	})
 }
 
-func (channel *Channel) negotiate() (err error) {
+func (c *Channel) negotiate() (err error) {
 	var n int
-	localID := []byte(channel.localID)
+	localID := []byte(c.localID)
 	n = negotiationHeaderFixedSize + len(localID) + 1
 	buffer := make([]byte, n)
 	nativeEndian.PutUint32(buffer, uint32(0X4D4F4341))
 	nativeEndian.PutUint32(buffer[4:8], uint32(0))
 	nativeEndian.PutUint32(buffer[8:12], uint32(len(localID)))
 	copy(buffer[12:n], localID)
-	if n, err = channel.conn.Write(buffer); n != len(buffer) || err != nil {
-		channel.logger.Print("[E] Failed to write negotiation header")
+	if n, err = c.conn.Write(buffer); n != len(buffer) || err != nil {
+		c.logger.Print("[E] Failed to write negotiation header")
 		return
 	}
 
 	negotiationHeader := negotiationHeader(buffer[0:negotiationHeaderFixedSize])
-	channel.conn.SetReadDeadline(time.Now().Add(channel.config.Timeout))
-	if _, err = io.ReadFull(channel.reader, negotiationHeader); err != nil {
+	c.conn.SetReadDeadline(time.Now().Add(c.config.Timeout))
+	if _, err = io.ReadFull(c.reader, negotiationHeader); err != nil {
 		if err != io.EOF && !strings.Contains(err.Error(), "closed") && !strings.Contains(err.Error(), "reset by peer") {
-			channel.config.Logger.Printf("[E]: Failed to read negotiation header %v", err)
+			c.config.Logger.Printf("[E]: Failed to read negotiation header %v", err)
 		}
 		return
 	}
-	if channel.remoteEndian, err = negotiationHeader.magicCode(); err != nil {
-		channel.config.Logger.Printf("[E]: %v", err)
+	if c.remoteEndian, err = negotiationHeader.magicCode(); err != nil {
+		c.config.Logger.Printf("[E]: %v", err)
 		return
 	}
-	channel.remoteVersion, channel.remoteFlags = negotiationHeader.flags(channel.remoteEndian)
-	peerIDSize := negotiationHeader.peerIDSize(channel.remoteEndian)
-	if peerIDSize > channel.config.Limit {
-		channel.config.Logger.Printf("[E]: peer id size %d is greater than limit of %d", peerIDSize, channel.config.Limit)
+	c.remoteVersion, c.remoteFlags = negotiationHeader.flags(c.remoteEndian)
+	peerIDSize := negotiationHeader.peerIDSize(c.remoteEndian)
+	if peerIDSize > c.config.Limit {
+		c.config.Logger.Printf("[E]: peer id size %d is greater than limit of %d", peerIDSize, c.config.Limit)
 		err = errors.New("Peer id too long")
 		return
 	}
-	channel.remoteID, err = readStringBody(peerIDSize, channel.reader, channel.logger)
-	channel.conn.SetReadDeadline(time.Now().Add(time.Hour * 0xffff))
+	c.remoteID, err = readStringBody(peerIDSize, c.reader, c.logger)
+	c.conn.SetReadDeadline(time.Now().Add(time.Hour * 0xffff))
 	return
 }
 
-func (channel *Channel) receive() {
-	defer channel.waitGroup.Done()
+func (c *Channel) receive() {
+	defer c.waitGroup.Done()
 	for {
 		/* read packets */
 		var packet *Packet
 		var err error
-		if packet, err = readPacket(channel.config.Limit, channel.remoteEndian, channel.reader, channel.config.Logger); err != nil {
-			channel.doClose()
+		if packet, err = readPacket(c.config.Limit, c.remoteEndian, c.reader, c.config.Logger); err != nil {
+			c.doClose()
 			return
 		}
-		channel.updateReadTime()
+		c.updateReadTime()
 		switch packet.tp {
 		case packetTypeHint:
-			channel.onHint(packet)
+			c.onHint(packet)
 		case packetTypeRequest:
-			channel.onRequest(packet)
+			c.onRequest(packet)
 		case packetTypeResponse:
-			channel.onResponse(packet)
+			c.onResponse(packet)
 		}
 	}
 }
 
-func (channel *Channel) send() {
-	defer channel.waitGroup.Done()
-	for packet := range channel.packet {
-		if channel.doSendPacket(packet) != nil {
-			channel.doClose()
+func (c *Channel) send() {
+	defer c.waitGroup.Done()
+	for packet := range c.packet {
+		if c.doSendPacket(packet) != nil {
+			c.doClose()
 		}
 	}
 }
 
-func (channel *Channel) nextPacketID() int64 {
-	return atomic.AddInt64(&channel.packetID, 1)
+func (c *Channel) nextPacketID() int64 {
+	return atomic.AddInt64(&c.packetID, 1)
 }
 
-func (channel *Channel) sendKeepalive() {
-	channel.sendPacket(channel.nextPacketID(), HintTypeKeepalive, nil, nil, packetTypeHint)
+func (c *Channel) sendKeepalive() {
+	c.sendPacket(c.nextPacketID(), HintTypeKeepalive, nil, nil, packetTypeHint)
 }
 
-func (channel *Channel) checkTimeout(timeout time.Duration, now time.Time) {
-	readTime := atomic.LoadInt64(&channel.lastReadTime)
+func (c *Channel) checkTimeout(timeout time.Duration, now time.Time) {
+	readTime := atomic.LoadInt64(&c.lastReadTime)
 	if readTime+timeout.Nanoseconds() < now.UnixNano() {
-		channel.logger.Printf("[E] Hasn't read any packet from remote peer %v within %v, close it",
-			channel.RemoteAddress(), timeout)
-		channel.doClose()
+		c.logger.Printf("[E] Hasn't read any packet from remote peer %v within %v, close it",
+			c.RemoteAddress(), timeout)
+		c.doClose()
 	}
 }
 
-func (channel *Channel) timer() {
-	defer channel.waitGroup.Done()
-	defer channel.ticker.Stop()
-	keepAlive := channel.config.Keepalive
-	if atomic.LoadInt32(&channel.remoteFlags)&negotiationFlagNoHint != 0 {
+func (c *Channel) timer() {
+	defer c.waitGroup.Done()
+	defer c.ticker.Stop()
+	keepAlive := c.config.Keepalive
+	if atomic.LoadInt32(&c.remoteFlags)&negotiationFlagNoHint != 0 {
 		keepAlive = time.Duration(time.Nanosecond * math.MaxInt64)
 	}
-	timeout := channel.config.Timeout
+	timeout := c.config.Timeout
 	now := time.Now()
 	nextKeepaliveTime := now.Add(keepAlive)
 	nextTimeoutTime := now.Add(timeout)
-	for now = range channel.ticker.C {
-		if channel.stopped() {
+	for now = range c.ticker.C {
+		if c.stopped() {
 			break
 		}
 		if now.After(nextKeepaliveTime) {
-			channel.sendKeepalive()
+			c.sendKeepalive()
 			nextKeepaliveTime = now.Add(keepAlive)
 		}
 		if now.After(nextTimeoutTime) {
-			channel.checkTimeout(timeout, now)
+			c.checkTimeout(timeout, now)
 			nextTimeoutTime = now.Add(timeout)
 		}
 	}

@@ -18,7 +18,8 @@ import (
 
 var emptyHeader = make([]PacketHeader, 0)
 var emptyOpaqueData = make([]byte, 0)
-var alreadyStoppedError = errors.New("Server channel has been stopped already")
+var errChannelClosed = errors.New("Channel has been closed already")
+var errDuplicatedHeaderKey = errors.New("Duplicated key in packet header")
 
 /*
  Configuration for channel.
@@ -107,9 +108,13 @@ type Channel struct {
 	remoteAddress net.Addr
 	waitGroup     sync.WaitGroup
 	ticker        *time.Ticker
+	established   sync.WaitGroup
 
-	Request  chan *Packet
-	Response chan *Packet
+	request  chan<- Request
+	response chan<- Response
+
+	Request  <-chan Request
+	Response <-chan Response
 }
 
 type ServerChannel struct {
@@ -120,69 +125,76 @@ type ServerChannel struct {
 }
 
 func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err error) {
+	request := make(chan Request, 64)
+	response := make(chan Response, 64)
 	channel = &Channel{
 		config:        config,
 		reader:        bufio.NewReader(conn),
 		localID:       config.ID,
 		conn:          conn,
-		Request:       make(chan *Packet, 64),
-		Response:      make(chan *Packet, 64),
+		request:       request,
+		Request:       request,
+		response:      response,
+		Response:      response,
 		packet:        make(chan *Packet, 64),
 		localAddress:  conn.LocalAddr(),
 		remoteAddress: conn.RemoteAddr(),
 		logger:        config.Logger,
 	}
 
+	channel.established.Add(1)
 	go channel.run()
 	return channel, nil
 }
 
-func (channel *Channel) run() {
-	channel.waitGroup.Add(1)
-	defer channel.waitGroup.Done()
-	if err := channel.negotiate(); err != nil {
-		channel.doClose()
+func (c *Channel) run() {
+	c.waitGroup.Add(1)
+	defer c.waitGroup.Done()
+	err := c.negotiate()
+	c.established.Done()
+	if err != nil {
+		c.doClose()
 		return
 	}
-	sleepTime := channel.config.Keepalive
-	if atomic.LoadInt32(&channel.remoteFlags)&negotiationFlagNoHint != 0 {
+	sleepTime := c.config.Keepalive
+	if atomic.LoadInt32(&c.remoteFlags)&negotiationFlagNoHint != 0 {
 		sleepTime = time.Duration(time.Nanosecond * math.MaxInt64)
 	}
-	if sleepTime > channel.config.Timeout {
-		sleepTime = channel.config.Timeout
+	if sleepTime > c.config.Timeout {
+		sleepTime = c.config.Timeout
 	}
 	if sleepTime > time.Second {
 		/* at least check timeout once a second in case user set a long timeout */
 		sleepTime = time.Second
 	}
-	channel.ticker = time.NewTicker(sleepTime)
-	channel.updateReadTime()
-	channel.waitGroup.Add(3)
-	go channel.receive()
-	go channel.send()
-	go channel.timer()
+	c.ticker = time.NewTicker(sleepTime)
+	c.updateReadTime()
+	c.waitGroup.Add(3)
+	go c.receive()
+	go c.send()
+	go c.timer()
 	return
 }
 
-func (channel *Channel) LocalID() string {
-	return channel.localID
+func (c *Channel) LocalID() string {
+	return c.localID
 }
 
-func (channel *Channel) RemoteID() string {
-	return channel.remoteID
+func (c *Channel) RemoteID() string {
+	return c.remoteID
 }
 
-func (channel *Channel) LocalAddress() net.Addr {
-	return channel.localAddress
+func (c *Channel) LocalAddress() net.Addr {
+	return c.localAddress
 }
 
-func (channel *Channel) RemoteAddress() net.Addr {
-	return channel.remoteAddress
+func (c *Channel) RemoteAddress() net.Addr {
+	return c.remoteAddress
 }
 
-func (channel *Channel) SendRequest(code int32, header []PacketHeader, payload []uint8) (id int64) {
-	id = channel.nextPacketID()
-	channel.SendRequestWithID(id, code, header, payload)
+func (c *Channel) SendRequest(code int32, header []PacketHeader, payload []uint8) (id int64, err error) {
+	id = c.nextPacketID()
+	err = c.SendRequestWithID(id, code, header, payload)
 	return
 }
 
@@ -216,10 +228,37 @@ func NewHeader(args ...[]byte) (header []PacketHeader, err error) {
 	return
 }
 
-func (channel *Channel) sendPacket(id int64, code int32, header []PacketHeader, payload []uint8, tp int32) {
-	channel.ensure(func() {
-		if channel.running() {
-			channel.packet <- &Packet{
+func NewHeaderFromMap(args map[string]string) []PacketHeader {
+	count := len(args)
+	if count == 0 {
+		return emptyHeader
+	}
+	header := make([]PacketHeader, count, count)
+	idx := 0
+	for k, v := range args {
+		header[idx] = PacketHeader{
+			Key:   []byte(k),
+			Value: []byte(v),
+		}
+		idx++
+	}
+	return header
+}
+
+func HeaderToMap(header []PacketHeader) (map[string]string, error) {
+	m := make(map[string]string, len(header))
+	for _, h := range header {
+		if _, ok := m[string(h.Key)]; ok {
+			return nil, errDuplicatedHeaderKey
+		}
+	}
+	return m, nil
+}
+
+func (c *Channel) sendPacket(id int64, code int32, header []PacketHeader, payload []uint8, tp int32) (err error) {
+	c.ensure(func() {
+		if c.running() {
+			c.packet <- &Packet{
 				ID:      id,
 				Code:    code,
 				tp:      tp,
@@ -227,63 +266,86 @@ func (channel *Channel) sendPacket(id int64, code int32, header []PacketHeader, 
 				Header:  header,
 				Payload: payload,
 			}
+		} else {
+			err = errChannelClosed
 		}
 	})
+	return
 }
 
-func (channel *Channel) SendRequestWithID(id int64, code int32, header []PacketHeader, payload []uint8) {
-	channel.sendPacket(id, code, header, payload, packetTypeRequest)
+func (c *Channel) SendRequestWithID(id int64, code int32, header []PacketHeader, payload []uint8) error {
+	return c.sendPacket(id, code, header, payload, packetTypeRequest)
 }
 
-func (channel *Channel) SendResponse(id int64, code int32, header []PacketHeader, payload []uint8) {
-	channel.sendPacket(id, code, header, payload, packetTypeResponse)
+func (c *Channel) SendResponse(id int64, code int32, header []PacketHeader, payload []uint8) error {
+	return c.sendPacket(id, code, header, payload, packetTypeResponse)
 }
 
-func drainChannel(channel chan *Packet) {
+func drainRequests(c <-chan Request) {
 	for {
 		select {
-		case <-channel:
+		case <-c:
 		default:
 			return
 		}
 	}
 }
 
-func (channel *Channel) doClose() {
-	channel.stop(func() {
-		channel.conn.Close()
+func drainResponses(c <-chan Response) {
+	for {
+		select {
+		case <-c:
+		default:
+			return
+		}
+	}
+}
+
+func drainPackets(c <-chan *Packet) {
+	for {
+		select {
+		case <-c:
+		default:
+			return
+		}
+	}
+}
+
+func (c *Channel) doClose() {
+	c.stop(func() {
+		c.conn.Close()
 	}, func() {
-		drainChannel(channel.packet)
-		drainChannel(channel.Request)
-		drainChannel(channel.Response)
+		drainPackets(c.packet)
+		drainRequests(c.Request)
+		drainResponses(c.Response)
 	}, func() {
-		close(channel.packet)
-		close(channel.Request)
-		close(channel.Response)
+		close(c.packet)
+		close(c.request)
+		close(c.response)
 	})
 }
 
-func (channel *Channel) Close() {
-	channel.doClose()
-	channel.waitGroup.Wait()
+func (c *Channel) Close() {
+	c.doClose()
+	c.waitGroup.Wait()
 }
 
-func (channel *ServerChannel) Accept() (client *Channel, err error) {
-	channel.ensure(func() {
+func (c *ServerChannel) Accept() (client *Channel, err error) {
+	c.ensure(func() {
 		var conn net.Conn
-		if conn, err = channel.listener.Accept(); err == nil {
-			client, err = newChannel(conn, channel.config)
+		if conn, err = c.listener.Accept(); err == nil {
+			client, err = newChannel(conn, c.config)
 		}
 	})
 	if client == nil && err == nil {
-		err = alreadyStoppedError
+		err = errChannelClosed
 	}
 	return
 }
 
-func (channel *ServerChannel) Close() {
-	channel.stop(nil, func() {
-		channel.listener.Close()
+func (c *ServerChannel) Close() {
+	c.stop(nil, func() {
+		c.listener.Close()
 	}, nil)
 }
 
@@ -345,14 +407,19 @@ func Bind(config *ChannelConfig) (channel *ServerChannel, err error) {
 func ConnectConn(conn net.Conn, config *ChannelConfig) (channel *Channel, err error) {
 	config = checkConfig(config)
 	config.Address = conn.LocalAddr().String()
-	return newChannel(conn, config)
+	c, err := newChannel(conn, config)
+	if err == nil {
+		c.established.Wait()
+	}
+	return c, err
 }
 
 func Connect(config *ChannelConfig) (channel *Channel, err error) {
 	config = checkConfig(config)
 	var conn net.Conn
-	if conn, err = net.Dial("tcp", config.Address); err != nil {
+	if conn, err = net.DialTimeout("tcp", config.Address, config.Timeout); err != nil {
 		return
 	}
-	return newChannel(conn, config)
+	return ConnectConn(conn, config)
+
 }
