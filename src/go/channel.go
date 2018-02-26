@@ -115,6 +115,7 @@ type Channel struct {
 
 	Request  <-chan Request
 	Response <-chan Response
+	UserData interface{}
 }
 
 type ServerChannel struct {
@@ -122,6 +123,7 @@ type ServerChannel struct {
 	config   *ChannelConfig
 	logger   *log.Logger
 	listener net.Listener
+	UserData interface{}
 }
 
 func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err error) {
@@ -196,6 +198,10 @@ func (c *Channel) SendRequest(code int32, header []PacketHeader, payload []uint8
 	id = c.nextPacketID()
 	err = c.SendRequestWithID(id, code, header, payload)
 	return
+}
+
+func (c *Channel) NextID() int64 {
+	return c.nextPacketID()
 }
 
 func NewHeaderMust(args ...[]byte) []PacketHeader {
