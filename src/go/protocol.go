@@ -11,6 +11,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -126,10 +127,11 @@ type PacketHeader struct {
 type Packet struct {
 	ID      int64
 	Code    int32
+	tp      int32
 	Header  []PacketHeader
 	Payload []byte
-	tp      int32
 	flags   int32
+	size    int32
 }
 
 type Response *Packet
@@ -265,6 +267,7 @@ func readPacket(limit int32, endian binary.ByteOrder, reader io.Reader, logger *
 		return
 	}
 	packet.Payload, err = readOpaqueData(payloadSize, reader, logger)
+	packet.size = packetHeaderFixedSize + headerSize + payloadSize
 	return
 }
 
@@ -361,14 +364,43 @@ func (c *Channel) doSendPacket(packet *Packet) (err error) {
 	if payloadLength > 0 {
 		copy(buffer[24+headerLength:length], packet.Payload)
 	}
+	packet.size = int32(length)
+	c.updateWriteTime(packet)
 	_, err = c.conn.Write(buffer)
 	return
 }
 
-func (c *Channel) updateReadTime() {
-	atomic.StoreInt64(&c.lastReadTime, time.Now().UnixNano())
+func (c *Channel) updateWriteTime(packet *Packet) {
+	now := time.Now().UnixNano()
+	c.stats.txBytes += uint64(packet.size)
+	c.stats.txPackets++
+	c.stats.lastTxPacketTime = now
+	switch packet.tp {
+	case packetTypeRequest:
+		c.stats.txRequests++
+		c.stats.lastTxRequestTime = now
+	case packetTypeResponse:
+		c.stats.txResponses++
+		c.stats.lastTxResponseTime = now
+	}
+	atomic.StoreInt64(&c.lastWriteTime, now)
 }
 
+func (c *Channel) updateReadTime(packet *Packet) {
+	now := time.Now().UnixNano()
+	c.stats.rxBytes += uint64(packet.size)
+	c.stats.rxPackets++
+	c.stats.lastRxPacketTime = now
+	switch packet.tp {
+	case packetTypeRequest:
+		c.stats.rxRequests++
+		c.stats.lastRxRequestTime = now
+	case packetTypeResponse:
+		c.stats.rxResponses++
+		c.stats.lastRxResponseTime = now
+	}
+	atomic.StoreInt64(&c.lastReadTime, now)
+}
 
 func (c *Channel) onKeepalive() {
 }
@@ -431,6 +463,15 @@ func (c *Channel) negotiate() (err error) {
 	}
 	c.remoteID, err = readStringBody(peerIDSize, c.reader, c.logger)
 	c.conn.SetReadDeadline(time.Now().Add(time.Hour * 0xffff))
+	mtx := sync.Mutex{}
+	/*
+	 * issue a full memory barrier so later r/w to these in dedicated goroutine
+	 * doesn't require synchronization
+	 */
+	mtx.Lock()
+	c.stats.txBytes = uint64(negotiationHeaderFixedSize + len(localID))
+	c.stats.rxBytes = uint64(negotiationHeaderFixedSize + peerIDSize)
+	mtx.Unlock()
 	return
 }
 
@@ -444,7 +485,7 @@ func (c *Channel) receive() {
 			c.doClose()
 			return
 		}
-		c.updateReadTime()
+		c.updateReadTime(packet)
 		switch packet.tp {
 		case packetTypeHint:
 			c.onHint(packet)
@@ -470,7 +511,7 @@ func (c *Channel) nextPacketID() int64 {
 }
 
 func (c *Channel) sendKeepalive() {
-	c.sendPacket(c.nextPacketID(), HintTypeKeepalive, nil, nil, packetTypeHint)
+	c.sendPacket(c.nextPacketID(), HintTypeKeepalive, nil, nil, packetTypeHint, true)
 }
 
 func (c *Channel) checkTimeout(timeout time.Duration, now time.Time) {

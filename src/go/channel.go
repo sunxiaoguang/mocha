@@ -20,6 +20,7 @@ var emptyHeader = make([]PacketHeader, 0)
 var emptyOpaqueData = make([]byte, 0)
 var errChannelClosed = errors.New("Channel has been closed already")
 var errDuplicatedHeaderKey = errors.New("Duplicated key in packet header")
+var ErrWouldBlock = errors.New("Sending would block because buffer is full")
 
 /*
  Configuration for channel.
@@ -35,13 +36,14 @@ var errDuplicatedHeaderKey = errors.New("Duplicated key in packet header")
 	Logger: dummy logger which discards everything
 */
 type ChannelConfig struct {
-	Address   string
-	Timeout   time.Duration
-	Keepalive time.Duration
-	Limit     int32
-	ID        string
-	Flags     int32
-	Logger    *log.Logger
+	Address               string
+	Timeout               time.Duration
+	Keepalive             time.Duration
+	Limit                 int32
+	ID                    string
+	Flags                 int32
+	Logger                *log.Logger
+	ChannelBufferCapacity int
 }
 
 type lifecycle struct {
@@ -90,6 +92,44 @@ func (l *lifecycle) stop(prolog, resolve, epilog func()) {
 	}
 }
 
+type channelStats struct {
+	txBytes uint64
+	rxBytes uint64
+
+	txPackets   uint64
+	txRequests  uint64
+	txResponses uint64
+	rxPackets   uint64
+	rxRequests  uint64
+	rxResponses uint64
+
+	lastTxPacketTime   int64
+	lastTxRequestTime  int64
+	lastTxResponseTime int64
+	lastRxPacketTime   int64
+	lastRxRequestTime  int64
+	lastRxResponseTime int64
+}
+
+type ChannelStats struct {
+	TxBytes uint64
+	RxBytes uint64
+
+	TxPackets   uint64
+	TxRequests  uint64
+	TxResponses uint64
+	RxPackets   uint64
+	RxRequests  uint64
+	RxResponses uint64
+
+	LastTxPacketTime   time.Time
+	LastTxRequestTime  time.Time
+	LastTxResponseTime time.Time
+	LastRxPacketTime   time.Time
+	LastRxRequestTime  time.Time
+	LastRxResponseTime time.Time
+}
+
 type Channel struct {
 	lifecycle
 	config        *ChannelConfig
@@ -102,6 +142,7 @@ type Channel struct {
 	packet        chan *Packet
 	packetID      int64
 	lastReadTime  int64
+	lastWriteTime int64
 	remoteID      string
 	localID       string
 	localAddress  net.Addr
@@ -113,9 +154,44 @@ type Channel struct {
 	request  chan<- Request
 	response chan<- Response
 
+	stats channelStats
+
 	Request  <-chan Request
 	Response <-chan Response
 	UserData interface{}
+}
+
+func convertTsToTime(from int64) time.Time {
+	return time.Unix(from/1000000000, from%1000000000)
+}
+
+func (c *Channel) Stats() ChannelStats {
+	/* use atomic read here to read latest data but do not force update side to
+	* flush updates immediately */
+	lastTxPacketTime := atomic.LoadInt64(&c.stats.lastTxPacketTime)
+	lastTxRequestTime := atomic.LoadInt64(&c.stats.lastTxRequestTime)
+	lastTxResponseTime := atomic.LoadInt64(&c.stats.lastTxResponseTime)
+	lastRxPacketTime := atomic.LoadInt64(&c.stats.lastRxPacketTime)
+	lastRxRequestTime := atomic.LoadInt64(&c.stats.lastRxRequestTime)
+	lastRxResponseTime := atomic.LoadInt64(&c.stats.lastRxResponseTime)
+
+	return ChannelStats{
+		TxBytes:     atomic.LoadUint64(&c.stats.txBytes),
+		TxPackets:   atomic.LoadUint64(&c.stats.txPackets),
+		TxRequests:  atomic.LoadUint64(&c.stats.txRequests),
+		TxResponses: atomic.LoadUint64(&c.stats.txResponses),
+		RxBytes:     atomic.LoadUint64(&c.stats.rxBytes),
+		RxPackets:   atomic.LoadUint64(&c.stats.rxPackets),
+		RxRequests:  atomic.LoadUint64(&c.stats.rxRequests),
+		RxResponses: atomic.LoadUint64(&c.stats.rxResponses),
+
+		LastTxPacketTime:   convertTsToTime(lastTxPacketTime),
+		LastTxRequestTime:  convertTsToTime(lastTxRequestTime),
+		LastTxResponseTime: convertTsToTime(lastTxResponseTime),
+		LastRxPacketTime:   convertTsToTime(lastRxPacketTime),
+		LastRxRequestTime:  convertTsToTime(lastRxRequestTime),
+		LastRxResponseTime: convertTsToTime(lastRxResponseTime),
+	}
 }
 
 type ServerChannel struct {
@@ -127,8 +203,8 @@ type ServerChannel struct {
 }
 
 func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err error) {
-	request := make(chan Request, 64)
-	response := make(chan Response, 64)
+	request := make(chan Request, config.ChannelBufferCapacity)
+	response := make(chan Response, config.ChannelBufferCapacity)
 	channel = &Channel{
 		config:        config,
 		reader:        bufio.NewReader(conn),
@@ -138,7 +214,7 @@ func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err err
 		Request:       request,
 		response:      response,
 		Response:      response,
-		packet:        make(chan *Packet, 64),
+		packet:        make(chan *Packet, config.ChannelBufferCapacity),
 		localAddress:  conn.LocalAddr(),
 		remoteAddress: conn.RemoteAddr(),
 		logger:        config.Logger,
@@ -170,7 +246,7 @@ func (c *Channel) run() {
 		sleepTime = time.Second
 	}
 	c.ticker = time.NewTicker(sleepTime)
-	c.updateReadTime()
+	c.updateReadTime(&Packet{})
 	c.waitGroup.Add(3)
 	go c.receive()
 	go c.send()
@@ -197,6 +273,12 @@ func (c *Channel) RemoteAddress() net.Addr {
 func (c *Channel) SendRequest(code int32, header []PacketHeader, payload []uint8) (id int64, err error) {
 	id = c.nextPacketID()
 	err = c.SendRequestWithID(id, code, header, payload)
+	return
+}
+
+func (c *Channel) TrySendRequest(code int32, header []PacketHeader, payload []uint8) (id int64, err error) {
+	id = c.nextPacketID()
+	err = c.TrySendRequestWithID(id, code, header, payload)
 	return
 }
 
@@ -261,16 +343,26 @@ func HeaderToMap(header []PacketHeader) (map[string]string, error) {
 	return m, nil
 }
 
-func (c *Channel) sendPacket(id int64, code int32, header []PacketHeader, payload []uint8, tp int32) (err error) {
+func (c *Channel) sendPacket(id int64, code int32, header []PacketHeader, payload []uint8, tp int32, nonblocking bool) (err error) {
 	c.ensure(func() {
 		if c.running() {
-			c.packet <- &Packet{
+			packet := &Packet{
 				ID:      id,
 				Code:    code,
 				tp:      tp,
 				flags:   0,
 				Header:  header,
 				Payload: payload,
+			}
+
+			if nonblocking {
+				select {
+				case c.packet <- packet:
+				default:
+					err = ErrWouldBlock
+				}
+			} else {
+				c.packet <- packet
 			}
 		} else {
 			err = errChannelClosed
@@ -279,12 +371,20 @@ func (c *Channel) sendPacket(id int64, code int32, header []PacketHeader, payloa
 	return
 }
 
+func (c *Channel) TrySendRequestWithID(id int64, code int32, header []PacketHeader, payload []uint8) error {
+	return c.sendPacket(id, code, header, payload, packetTypeRequest, true)
+}
+
 func (c *Channel) SendRequestWithID(id int64, code int32, header []PacketHeader, payload []uint8) error {
-	return c.sendPacket(id, code, header, payload, packetTypeRequest)
+	return c.sendPacket(id, code, header, payload, packetTypeRequest, false)
 }
 
 func (c *Channel) SendResponse(id int64, code int32, header []PacketHeader, payload []uint8) error {
-	return c.sendPacket(id, code, header, payload, packetTypeResponse)
+	return c.sendPacket(id, code, header, payload, packetTypeResponse, false)
+}
+
+func (c *Channel) TrySendResponse(id int64, code int32, header []PacketHeader, payload []uint8) error {
+	return c.sendPacket(id, code, header, payload, packetTypeResponse, true)
 }
 
 func drainRequests(c <-chan Request) {
@@ -363,13 +463,17 @@ func checkConfig(config *ChannelConfig) *ChannelConfig {
 	if len(result.Address) == 0 {
 		result.Address = "localhost:1234"
 	}
-	if result.Timeout.Nanoseconds() == 0 {
+	if result.Timeout == 0 {
 		result.Timeout = time.Duration(30 * time.Second)
+	} else if result.Timeout < time.Millisecond*10 {
+		result.Timeout = time.Millisecond * 10
 	}
-	if result.Keepalive.Nanoseconds() == 0 {
+	if result.Keepalive == 0 {
 		result.Keepalive = time.Duration(10 * time.Second)
+	} else if result.Keepalive < time.Second {
+		result.Keepalive = time.Second
 	}
-	if result.Limit == 0 {
+	if result.Limit <= 0 {
 		result.Limit = 1024 * 1024
 	}
 	if result.Flags != 0 {
@@ -377,6 +481,9 @@ func checkConfig(config *ChannelConfig) *ChannelConfig {
 	}
 	if result.Logger == nil {
 		result.Logger = log.New(ioutil.Discard, "MochaRPC", 0)
+	}
+	if result.ChannelBufferCapacity < 64 {
+		result.ChannelBufferCapacity = 64
 	}
 	if len(result.ID) == 0 {
 		uuid := make([]byte, 16)
