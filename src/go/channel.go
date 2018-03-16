@@ -432,8 +432,16 @@ func (c *Channel) doClose() {
 }
 
 func (c *Channel) Close() {
-	c.doClose()
+	c.NonBlockingClose()
+	c.Join()
+}
+
+func (c *Channel) Join() {
 	c.waitGroup.Wait()
+}
+
+func (c *Channel) NonBlockingClose() {
+	c.doClose()
 }
 
 func (c *ServerChannel) Accept() (client *Channel, err error) {

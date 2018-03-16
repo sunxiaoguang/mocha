@@ -67,7 +67,7 @@ func (c *ChannelEasy) Invoke(code int32, header []PacketHeader, payload []uint8)
 					packetType = "response"
 				}
 				c.channel.logger.Printf("[E]: Unexpected %s: id=%d, code=%d, headers=%v, %d bytes payload '%v'", packetType,
-					packet.ID, packet.Code, packet.Header, packet.Payload)
+					packet.ID, packet.Code, packet.Header, len(packet.Payload), packet.Payload)
 			}
 		}
 	}
