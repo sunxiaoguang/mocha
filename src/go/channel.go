@@ -16,11 +16,17 @@ import (
 	"time"
 )
 
-var emptyHeader = make([]PacketHeader, 0)
-var emptyOpaqueData = make([]byte, 0)
-var errChannelClosed = errors.New("Channel has been closed already")
-var errDuplicatedHeaderKey = errors.New("Duplicated key in packet header")
-var ErrWouldBlock = errors.New("Sending would block because buffer is full")
+var (
+	emptyHeader            = make([]PacketHeader, 0)
+	emptyOpaqueData        = make([]byte, 0)
+	errDuplicatedHeaderKey = errors.New("Duplicated key in packet header")
+	ErrChannelClosed       = errors.New("Channel has been closed already")
+	ErrWouldBlock          = errors.New("Sending would block because buffer is full")
+)
+
+type ChannelFlag uint32
+
+const ChannelFlagNoLinger ChannelFlag = 0x00010000
 
 /*
  Configuration for channel.
@@ -41,7 +47,7 @@ type ChannelConfig struct {
 	Keepalive             time.Duration
 	Limit                 int32
 	ID                    string
-	Flags                 int32
+	Flags                 ChannelFlag
 	Logger                *log.Logger
 	ChannelBufferCapacity int
 }
@@ -51,9 +57,17 @@ type lifecycle struct {
 	barrier  int32
 }
 
-func (l *lifecycle) ensure(callable func()) {
+func (l *lifecycle) addRef() {
 	atomic.AddInt32(&l.barrier, 1)
-	defer atomic.AddInt32(&l.barrier, -1)
+}
+
+func (l *lifecycle) release() {
+	atomic.AddInt32(&l.barrier, -1)
+}
+
+func (l *lifecycle) ensure(callable func()) {
+	l.addRef()
+	defer l.release()
 	if l.running() {
 		callable()
 	}
@@ -150,6 +164,7 @@ type Channel struct {
 	waitGroup     sync.WaitGroup
 	ticker        *time.Ticker
 	established   sync.WaitGroup
+	linger        bool
 
 	request  chan<- Request
 	response chan<- Response
@@ -218,6 +233,7 @@ func newChannel(conn net.Conn, config *ChannelConfig) (channel *Channel, err err
 		localAddress:  conn.LocalAddr(),
 		remoteAddress: conn.RemoteAddr(),
 		logger:        config.Logger,
+		linger:        config.Flags&ChannelFlagNoLinger == 0,
 	}
 
 	channel.established.Add(1)
@@ -358,14 +374,20 @@ func (c *Channel) sendPacket(id int64, code int32, header []PacketHeader, payloa
 			if nonblocking {
 				select {
 				case c.packet <- packet:
+					if c.linger {
+						c.addRef()
+					}
 				default:
 					err = ErrWouldBlock
 				}
 			} else {
 				c.packet <- packet
+				if c.linger {
+					c.addRef()
+				}
 			}
 		} else {
-			err = errChannelClosed
+			err = ErrChannelClosed
 		}
 	})
 	return
@@ -387,44 +409,9 @@ func (c *Channel) TrySendResponse(id int64, code int32, header []PacketHeader, p
 	return c.sendPacket(id, code, header, payload, packetTypeResponse, true)
 }
 
-func drainRequests(c <-chan Request) {
-	for {
-		select {
-		case <-c:
-		default:
-			return
-		}
-	}
-}
-
-func drainResponses(c <-chan Response) {
-	for {
-		select {
-		case <-c:
-		default:
-			return
-		}
-	}
-}
-
-func drainPackets(c <-chan *Packet) {
-	for {
-		select {
-		case <-c:
-		default:
-			return
-		}
-	}
-}
-
 func (c *Channel) doClose() {
-	c.stop(func() {
+	c.stop(nil, nil, func() {
 		c.conn.Close()
-	}, func() {
-		drainPackets(c.packet)
-		drainRequests(c.Request)
-		drainResponses(c.Response)
-	}, func() {
 		close(c.packet)
 		close(c.request)
 		close(c.response)
@@ -441,7 +428,7 @@ func (c *Channel) Join() {
 }
 
 func (c *Channel) NonBlockingClose() {
-	c.doClose()
+	go c.doClose()
 }
 
 func (c *ServerChannel) Accept() (client *Channel, err error) {
@@ -452,7 +439,7 @@ func (c *ServerChannel) Accept() (client *Channel, err error) {
 		}
 	})
 	if client == nil && err == nil {
-		err = errChannelClosed
+		err = ErrChannelClosed
 	}
 	return
 }
@@ -485,7 +472,8 @@ func checkConfig(config *ChannelConfig) *ChannelConfig {
 		result.Limit = 1024 * 1024
 	}
 	if result.Flags != 0 {
-		result.Flags = 0
+		/* only accept public flags */
+		result.Flags = result.Flags & 0xFFFF0000
 	}
 	if result.Logger == nil {
 		result.Logger = log.New(ioutil.Discard, "MochaRPC", 0)

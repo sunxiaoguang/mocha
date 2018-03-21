@@ -414,17 +414,13 @@ func (c *Channel) onHint(packet *Packet) {
 
 func (c *Channel) onRequest(request Request) {
 	c.ensure(func() {
-		if c.running() {
-			c.request <- request
-		}
+		c.request <- request
 	})
 }
 
 func (c *Channel) onResponse(response Response) {
 	c.ensure(func() {
-		if c.running() {
-			c.response <- response
-		}
+		c.response <- response
 	})
 }
 
@@ -482,7 +478,7 @@ func (c *Channel) receive() {
 		var packet *Packet
 		var err error
 		if packet, err = readPacket(c.config.Limit, c.remoteEndian, c.reader, c.config.Logger); err != nil {
-			c.doClose()
+			c.NonBlockingClose()
 			return
 		}
 		c.updateReadTime(packet)
@@ -499,9 +495,18 @@ func (c *Channel) receive() {
 
 func (c *Channel) send() {
 	defer c.waitGroup.Done()
-	for packet := range c.packet {
-		if c.doSendPacket(packet) != nil {
-			c.doClose()
+	if c.linger {
+		for packet := range c.packet {
+			if err := c.doSendPacket(packet); err != nil {
+				c.NonBlockingClose()
+			}
+			c.release()
+		}
+	} else {
+		for packet := range c.packet {
+			if c.doSendPacket(packet) != nil {
+				c.NonBlockingClose()
+			}
 		}
 	}
 }
@@ -519,7 +524,7 @@ func (c *Channel) checkTimeout(timeout time.Duration, now time.Time) {
 	if readTime+timeout.Nanoseconds() < now.UnixNano() {
 		c.logger.Printf("[E] Hasn't read any packet from remote peer %v within %v, close it",
 			c.RemoteAddress(), timeout)
-		c.doClose()
+		c.NonBlockingClose()
 	}
 }
 

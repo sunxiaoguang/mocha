@@ -40,7 +40,7 @@ func (c *ChannelEasy) Poll() (packet *Packet, err error) {
 	}
 
 	if !ok {
-		err = errChannelClosed
+		err = ErrChannelClosed
 	}
 	return
 }
