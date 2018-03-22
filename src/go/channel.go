@@ -68,9 +68,7 @@ func (l *lifecycle) release() {
 func (l *lifecycle) ensure(callable func()) {
 	l.addRef()
 	defer l.release()
-	if l.running() {
-		callable()
-	}
+	callable()
 }
 
 func (l *lifecycle) safe() bool {
@@ -433,9 +431,13 @@ func (c *Channel) NonBlockingClose() {
 
 func (c *ServerChannel) Accept() (client *Channel, err error) {
 	c.ensure(func() {
-		var conn net.Conn
-		if conn, err = c.listener.Accept(); err == nil {
-			client, err = newChannel(conn, c.config)
+		if c.running() {
+			var conn net.Conn
+			if conn, err = c.listener.Accept(); err == nil {
+				client, err = newChannel(conn, c.config)
+			}
+		} else {
+			err = ErrChannelClosed
 		}
 	})
 	if client == nil && err == nil {

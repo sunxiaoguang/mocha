@@ -414,13 +414,17 @@ func (c *Channel) onHint(packet *Packet) {
 
 func (c *Channel) onRequest(request Request) {
 	c.ensure(func() {
-		c.request <- request
+		if c.running() {
+			c.request <- request
+		}
 	})
 }
 
 func (c *Channel) onResponse(response Response) {
 	c.ensure(func() {
-		c.response <- response
+		if c.running() {
+			c.response <- response
+		}
 	})
 }
 
