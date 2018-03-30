@@ -163,6 +163,7 @@ type Channel struct {
 	ticker        *time.Ticker
 	established   sync.WaitGroup
 	linger        bool
+	lingerTime    time.Time
 
 	request  chan<- Request
 	response chan<- Response
@@ -407,8 +408,18 @@ func (c *Channel) TrySendResponse(id int64, code int32, header []PacketHeader, p
 	return c.sendPacket(id, code, header, payload, packetTypeResponse, true)
 }
 
+func (c *Channel) resolveLingerTimeout() {
+	if time.Now().Sub(c.lingerTime) > c.config.Timeout {
+		c.conn.Close()
+	}
+}
+
+func (c *Channel) recordLingerTime() {
+	c.lingerTime = time.Now()
+}
+
 func (c *Channel) doClose() {
-	c.stop(nil, nil, func() {
+	c.stop(nil, c.resolveLingerTimeout, func() {
 		c.conn.Close()
 		close(c.packet)
 		close(c.request)
